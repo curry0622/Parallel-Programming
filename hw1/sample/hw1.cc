@@ -3,6 +3,12 @@
 #include <cstdio>
 #include <mpi.h>
 
+int cmp (const void * a, const void * b) {
+   float fa = *(float *)a;
+   float fb = *(float *)b;
+   return (fa > fb) ? 1 : -1;
+}
+
 int main(int argc, char** argv) {
     // MPI init
     int rank, procNum;
@@ -18,14 +24,14 @@ int main(int argc, char** argv) {
     // Set handle size
     int handleSize = 0, avgSize = 0;
     if(arrSize % procNum != 0) {
+        avgSize = arrSize / procNum + 1;
         if(rank != procNum - 1)
             handleSize = arrSize / procNum + 1;
         else
             handleSize = arrSize - (procNum - 1) * (arrSize / procNum + 1);
-        avgSize = arrSize / procNum + 1;
     } else {
-        handleSize = arrSize / procNum;
         avgSize = arrSize / procNum;
+        handleSize = arrSize / procNum;
     }
 
     // MPI read file
@@ -33,6 +39,21 @@ int main(int argc, char** argv) {
     MPI_File fin;
     MPI_File_open(MPI_COMM_WORLD, inFileName, MPI_MODE_RDONLY, MPI_INFO_NULL, &fin);
     MPI_File_read_at_all(fin, sizeof(float) * rank * avgSize, data, handleSize, MPI_FLOAT, MPI_STATUS_IGNORE);
+
+    // Initial sort
+    qsort(data, handleSize, sizeof(float), cmp);
+
+    // // Odd-Even-Sort
+    // bool isSorted = false;
+    // while (isSorted) {
+    //     // odd
+    //     for(int i = 1; i <= procNum - 2; i += 2) {
+    //         if() {
+
+    //         }
+    //     }
+    // }
+    
 
     // MPI finalize
     MPI_Finalize();
