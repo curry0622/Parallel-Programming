@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <cstdio>
 #include <mpi.h>
 
@@ -10,8 +11,8 @@ int main(int argc, char** argv) {
 
     // Get args
     int arrSize = atoi(argv[1]);
-    char inFileName[] = argv[2];
-    char outFileName[] = argv[3];
+    char* inFileName = argv[2];
+    char* outFileName = argv[3];
 
     printf("array size: %d\n", arrSize);
     printf("input file name: %s\n", inFileName);
