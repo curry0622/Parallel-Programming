@@ -42,8 +42,54 @@ int main(int argc, char** argv) {
 
     // Initial sort
     qsort(data, handleSize, sizeof(float), cmp);
+    MPI_Barrier(MPI_COMM_WORLD);
 
-    // // Odd-Even-Sort
+    // Create odd & even groups
+    MPI_Group worldGroup, oddGroup, evenGroup;
+    MPI_Comm oddComm, evenComm;
+    MPI_Comm_group(MPI_COMM_WORLD, &worldGroup);
+    int oddGroupSize, evenGroupSize;
+    if(rank % 2 == 0) {
+        evenGroupSize = rank == procNum - 1 ? 1 : 2;
+        oddGroupSize = rank == 0 ? 1 : 2;
+    } else {
+        evenGroupSize = rank == 0 ? 1 : 2;
+        oddGroupSize = rank == procNum - 1 ? 1 : 2;
+    }
+    int oddGroupRanks[oddGroupSize], evenGroupRanks[evenGroupSize];
+    if(rank % 2 == 0) {
+        if(rank == procNum - 1) {
+            evenGroupRanks[0] = rank;
+        } else {
+            evenGroupRanks[0] = rank;
+            evenGroupRanks[1] = rank + 1;
+        }
+        if(rank == 0) {
+            oddGroupRanks[0] = rank;
+        } else {
+            oddGroupRanks[0] = rank - 1;
+            oddGroupRanks[1] = rank;
+        }
+    } else {
+        if(rank == 0) {
+            evenGroupRanks[0] = rank;
+        } else {
+            evenGroupRanks[0] = rank - 1;
+            evenGroupRanks[1] = rank;
+        }
+        if(rank == procNum - 1) {
+            oddGroupRanks[0] = rank;
+        } else {
+            oddGroupRanks[0] = rank;
+            oddGroupRanks[1] = rank + 1;
+        }
+    }
+    MPI_Group_incl(worldGroup, oddGroupSize, oddGroupRanks, &oddGroup);
+    MPI_Group_incl(worldGroup, evenGroupSize, evenGroupRanks, &evenGroup);
+    MPI_Comm_create(MPI_COMM_WORLD, oddGroup, &oddComm);
+    MPI_Comm_create(MPI_COMM_WORLD, evenGroup, &evenComm);
+
+    // Odd-Even-Sort
     // bool isSorted = false;
     // while (isSorted) {
     //     // odd
