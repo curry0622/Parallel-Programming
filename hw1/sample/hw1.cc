@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <cstring>
 #include <cstdio>
+#include <cfloat>
 #include <algorithm>
 #include <mpi.h>
 
@@ -42,6 +43,9 @@ int main(int argc, char** argv) {
         handleSize++;
     int offset = getOffset(rank, arrSize, procNum);
 
+    // Calculate last rank
+    int lastRank = std::min(procNum, arrSize) - 1;
+
     // Allocate memory
     float* data = (float*)malloc(sizeof(float) * (handleSize + 1) * 2);
 
@@ -63,14 +67,24 @@ int main(int argc, char** argv) {
         if(rank >= arrSize)
             goto BARRIER;
         if(isOddStage) {
+            // Odd stage
             if(rank % 2 == 0) {
                 if(rank > 0) {
                     MPI_Send(&handleSize, 1, MPI_INT, rank - 1, 0, MPI_COMM_WORLD);
                     MPI_Send(data, handleSize, MPI_FLOAT, rank - 1, 0, MPI_COMM_WORLD);
                     MPI_Recv(data, handleSize, MPI_FLOAT, rank - 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                    if(rank == lastRank - 1 && lastRank % 2 == 1) {
+                        MPI_Send(data + handleSize - 1, 1, MPI_FLOAT, lastRank, 0, MPI_COMM_WORLD);
+                    }
+                } else if(lastRank >= 1) {
+                    // Rank == 0
+                    float nextData;
+                    MPI_Recv(&nextData, 1, MPI_FLOAT, 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                    if(nextData < data[handleSize - 1])
+                        isSorted = false;
                 }
             } else {
-                if(rank < std::min(procNum, arrSize) - 1) {
+                if(rank < lastRank) {
                     int recvSize;
                     MPI_Recv(&recvSize, 1, MPI_INT, rank + 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
                     MPI_Recv(data + handleSize, recvSize, MPI_FLOAT, rank + 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
@@ -81,11 +95,21 @@ int main(int argc, char** argv) {
                     } else {
                         MPI_Send(data + handleSize, recvSize, MPI_FLOAT, rank + 1, 0, MPI_COMM_WORLD);
                     }
+                    if(rank == 1) {
+                        MPI_Send(data, 1, MPI_FLOAT, 0, 0, MPI_COMM_WORLD);
+                    }
+                } else if(lastRank >= 1 && lastRank % 2 == 1) {
+                    float lastData;
+                    MPI_Recv(&lastData, 1, MPI_FLOAT, lastRank - 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                    if(lastData > data[0]) {
+                        isSorted = false;
+                    }
                 }
             }
         } else {
+            // Even stage
             if(rank % 2 == 0) {
-                if(rank < std::min(procNum, arrSize) - 1) {
+                if(rank < lastRank) {
                     int recvSize;
                     MPI_Recv(&recvSize, 1, MPI_INT, rank + 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
                     MPI_Recv(data + handleSize ,recvSize , MPI_FLOAT, rank + 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
@@ -96,12 +120,22 @@ int main(int argc, char** argv) {
                     } else {
                         MPI_Send(data + handleSize, recvSize, MPI_FLOAT, rank + 1, 0, MPI_COMM_WORLD);
                     }
+                } else if(lastRank >= 1 && lastRank % 2 == 0) {
+                    // Rank == lastRank
+                    float lastData;
+                    MPI_Recv(&lastData, 1, MPI_FLOAT, lastRank - 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                    if(lastData > data[0]) {
+                        isSorted = false;
+                    }
                 }
             } else {
                 if(rank > 0) {
                     MPI_Send(&handleSize, 1, MPI_INT, rank - 1, 0, MPI_COMM_WORLD);
                     MPI_Send(data, handleSize, MPI_FLOAT, rank - 1, 0, MPI_COMM_WORLD);
                     MPI_Recv(data, handleSize, MPI_FLOAT, rank - 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                    if(lastRank >= 1 && lastRank % 2 == 0 && rank == lastRank - 1) {
+                        MPI_Send(data + handleSize - 1, 1, MPI_FLOAT, lastRank, 0, MPI_COMM_WORLD);
+                    }
                 }
             }
         }
@@ -117,8 +151,6 @@ int main(int argc, char** argv) {
     MPI_File_close(&fout);
     
     // MPI finalize
-    if(rank == 0) {
-        printf("Time: %f\n", MPI_Wtime() - startTime);
-    }
+    free(data);
     MPI_Finalize();
 }
