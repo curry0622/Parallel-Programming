@@ -5,8 +5,6 @@
 #include <algorithm>
 #include <mpi.h>
 
-#define BUF_SIZE 200000000
-
 int cmp (const void * a, const void * b) {
    float fa = *(float *)a;
    float fb = *(float *)b;
@@ -46,8 +44,11 @@ int main(int argc, char** argv) {
         handleSize++;
     int offset = getOffset(rank, arrSize, procNum);
 
+    // Allocate memory
+    float* data = (float*)malloc(sizeof(float) * (handleSize + 1) * 2);
+
     // MPI read file
-    float* data = (float*)malloc(sizeof(float) * handleSize);
+    // float* data = (float*)malloc(sizeof(float) * handleSize);
     // printf("[Rank %d] declare data done\n", rank);
     MPI_File fin;
     MPI_File_open(MPI_COMM_WORLD, inFileName, MPI_MODE_RDONLY, MPI_INFO_NULL, &fin);
@@ -84,23 +85,23 @@ int main(int argc, char** argv) {
                     int recvSize;
                     // printf("[Rank %d] get handleSize from %d\n", rank, rank + 1);
                     MPI_Recv(&recvSize, 1, MPI_INT, rank + 1, MPI_ANY_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-                    float* recvData = (float*)malloc(sizeof(float) * recvSize);
+                    // float* recvData = (float*)malloc(sizeof(float) * recvSize);
                     // printf("[Rank %d] get recvData from %d\n", rank, rank + 1);
-                    MPI_Recv(recvData, recvSize, MPI_FLOAT, rank + 1, MPI_ANY_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-                    if(data[handleSize - 1] > recvData[0]) {
+                    MPI_Recv(data + handleSize, recvSize, MPI_FLOAT, rank + 1, MPI_ANY_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                    if(data[handleSize - 1] > data[handleSize]) {
                         isSorted = false;
-                        float* merged = (float*)malloc((handleSize + recvSize) * sizeof(float));
-                        memcpy(merged, data, handleSize * sizeof(float));
-                        memcpy(merged + handleSize, recvData, recvSize * sizeof(float));
-                        qsort(merged, handleSize + recvSize, sizeof(float), cmp);
-                        memcpy(data, merged, handleSize * sizeof(float));
+                        // float* merged = (float*)malloc((handleSize + recvSize) * sizeof(float));
+                        // memcpy(merged, data, handleSize * sizeof(float));
+                        // memcpy(merged + handleSize, recvData, recvSize * sizeof(float));
+                        qsort(data, handleSize + recvSize, sizeof(float), cmp);
+                        // memcpy(data, merged, handleSize * sizeof(float));
                         // printf("[Rank %d] send merged to %d\n", rank, rank + 1);
-                        MPI_Send(merged + handleSize, recvSize, MPI_FLOAT, rank + 1, 0, MPI_COMM_WORLD);
-                        free(merged);
+                        MPI_Send(data + handleSize, recvSize, MPI_FLOAT, rank + 1, 0, MPI_COMM_WORLD);
+                        // free(merged);
                     } else {
-                        MPI_Send(recvData, recvSize, MPI_FLOAT, rank + 1, 0, MPI_COMM_WORLD);
+                        MPI_Send(data + handleSize, recvSize, MPI_FLOAT, rank + 1, 0, MPI_COMM_WORLD);
                     }
-                    free(recvData);
+                    // free(recvData);
                 } else {
                     goto BARRIER;
                 }
@@ -111,23 +112,23 @@ int main(int argc, char** argv) {
                     int recvSize;
                     // printf("[Rank %d] get recvSize from %d\n", rank, rank + 1);
                     MPI_Recv(&recvSize, 1, MPI_INT, rank + 1, MPI_ANY_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-                    float* recvData = (float*)malloc(sizeof(float) * recvSize);
+                    // float* recvData = (float*)malloc(sizeof(float) * recvSize);
                     // printf("[Rank %d] get recvData from %d\n", rank, rank + 1);
-                    MPI_Recv(recvData ,recvSize , MPI_FLOAT, rank + 1, MPI_ANY_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-                    if(data[handleSize - 1] > recvData[0]) {
+                    MPI_Recv(data + handleSize ,recvSize , MPI_FLOAT, rank + 1, MPI_ANY_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                    if(data[handleSize - 1] > data[handleSize]) {
                         isSorted = false;
-                        float* merged = (float*)malloc((handleSize + recvSize) * sizeof(float));
-                        memcpy(merged, data, handleSize * sizeof(float));
-                        memcpy(merged + handleSize, recvData, recvSize * sizeof(float));
-                        qsort(merged, handleSize + recvSize, sizeof(float), cmp);
-                        memcpy(data, merged, handleSize * sizeof(float));
+                        // float* merged = (float*)malloc((handleSize + recvSize) * sizeof(float));
+                        // memcpy(merged, data, handleSize * sizeof(float));
+                        // memcpy(merged + handleSize, recvData, recvSize * sizeof(float));
+                        qsort(data, handleSize + recvSize, sizeof(float), cmp);
+                        // memcpy(data, merged, handleSize * sizeof(float));
                         // printf("[Rank %d] send merged to %d\n", rank, rank + 1);
-                        MPI_Send(merged + handleSize, recvSize, MPI_FLOAT, rank + 1, 0, MPI_COMM_WORLD);
-                        free(merged);
+                        MPI_Send(data + handleSize, recvSize, MPI_FLOAT, rank + 1, 0, MPI_COMM_WORLD);
+                        // free(merged);
                     } else {
-                        MPI_Send(recvData, recvSize, MPI_FLOAT, rank + 1, 0, MPI_COMM_WORLD);
+                        MPI_Send(data + handleSize, recvSize, MPI_FLOAT, rank + 1, 0, MPI_COMM_WORLD);
                     }
-                    free(recvData);
+                    // free(recvData);
                 } else {
                     goto BARRIER;
                 }
