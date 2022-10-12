@@ -22,19 +22,19 @@ int getOffset(int rank, int size, int arrSize) {
 }
 
 int getHalfSize(float* arr, int size, float std) {
-    // TODO: binary search
-    int idx = size;
-    for(int i = 0; i < size; i++) {
-        if(arr[i] >= std) {
-            idx = i;
-            break;
-        }
+    int low = 0, high = size;
+    while(low != high) {
+        int mid = (low + high) / 2;
+        if(arr[mid] <= std)
+            low = mid + 1;
+        else
+            high = mid;
     }
-    return idx;
+    return low;
 }
 
-void mergeData(float* myDataBuf, int mySize, float* recvDataBuf, int recvSize, bool fromMin) {
-    float* newDataBuf = (float*)malloc(sizeof(float) * mySize);
+void mergeData(float* myDataBuf, int mySize, float* recvDataBuf, int recvSize, bool fromMin, float* funcBuf) {
+    float* newDataBuf = funcBuf;
     if(fromMin) {
         int i = 0, j = 0;
         while(i < mySize && j < recvSize && i + j < mySize) {
@@ -118,6 +118,7 @@ int main(int argc, char** argv) {
     // Allocate memory
     float* myDataBuf = (float*)malloc(sizeof(float) * (mySize + 1));
     float* recvDataBuf = (float*)malloc(sizeof(float) * (mySize + 1));
+    float* funcBuf = (float*)malloc(sizeof(float) * (mySize + 1));
 
     // MPI read file
     MPI_File fin;
@@ -231,7 +232,7 @@ int main(int argc, char** argv) {
                     );
                     if(DEBUG) std::cout << "C Rank " << rank << ", fin send recv " << rank - 1 << std::endl;
                     // Merge data
-                    mergeData(myDataBuf, mySize, recvDataBuf, recvSize, false);
+                    mergeData(myDataBuf, mySize, recvDataBuf, recvSize, false, funcBuf);
                 }
             } else {
                 // Send and recv median
@@ -264,7 +265,7 @@ int main(int argc, char** argv) {
                     );
                     if(DEBUG) std::cout << "F Rank " << rank << ", fin send recv " << rank + 1 << std::endl;
                     // Merge data
-                    mergeData(myDataBuf, mySize, recvDataBuf, recvSize, true);
+                    mergeData(myDataBuf, mySize, recvDataBuf, recvSize, true, funcBuf);
                 }
             }
 
