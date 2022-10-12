@@ -77,9 +77,6 @@ int main(int argc, char** argv) {
         handleSize++;
     MPI_Offset offset = getOffset(rank, size, arrSize) * sizeof(float);
 
-    // Calculate last rank
-    int lastRank = size - 1;
-
     // Allocate memory
     float* myDataBuf = (float*)malloc(sizeof(float) * (handleSize + 1) * 2);
     float* adjDataBuf = (float*)malloc(sizeof(float) * (handleSize + 1));
@@ -93,90 +90,35 @@ int main(int argc, char** argv) {
     // Initial sort
     boost::sort::spreadsort::float_sort(myDataBuf, myDataBuf + handleSize);
     MPI_Barrier(comm);
+    if(size == 1)
+        goto LABEL_WRITE;
 
-    // Odd-Even-Sort
+    // Odd even sort
     bool isSortedAll = false;
-    bool isOddStage = true;
+    bool isOddPhase = true;
     while(!isSortedAll) {
         bool isSorted = true;
-        if(isOddStage) {
-            // Odd stage
+        if(isOddPhase) {
+            // Odd phase
             if(rank % 2 == 0) {
-                if(rank > 0) {
-                    MPI_Send(&handleSize, 1, MPI_INT, rank - 1, 0, comm);
-                    MPI_Send(myDataBuf, handleSize, MPI_FLOAT, rank - 1, 0, comm);
-                    MPI_Recv(myDataBuf, handleSize, MPI_FLOAT, rank - 1, 0, comm, MPI_STATUS_IGNORE);
-                    if(rank == lastRank - 1 && lastRank % 2 == 1) {
-                        MPI_Send(myDataBuf + handleSize - 1, 1, MPI_FLOAT, lastRank, 0, comm);
-                    }
-                } else if(lastRank >= 1) {
-                    // Rank == 0
-                    float nextData;
-                    MPI_Recv(&nextData, 1, MPI_FLOAT, 1, 0, comm, MPI_STATUS_IGNORE);
-                    if(nextData < myDataBuf[handleSize - 1])
-                        isSorted = false;
-                }
+                
             } else {
-                if(rank < lastRank) {
-                    int recvSize;
-                    MPI_Recv(&recvSize, 1, MPI_INT, rank + 1, 0, comm, MPI_STATUS_IGNORE);
-                    MPI_Recv(adjDataBuf, recvSize, MPI_FLOAT, rank + 1, 0, comm, MPI_STATUS_IGNORE);
-                    if(myDataBuf[handleSize - 1] > adjDataBuf[0]) {
-                        isSorted = false;
-                        mergeSort(myDataBuf, handleSize, adjDataBuf, recvSize);
-                        MPI_Send(adjDataBuf, recvSize, MPI_FLOAT, rank + 1, 0, comm);
-                    } else {
-                        MPI_Send(adjDataBuf, recvSize, MPI_FLOAT, rank + 1, 0, comm);
-                    }
-                    if(rank == 1) {
-                        MPI_Send(myDataBuf, 1, MPI_FLOAT, 0, 0, comm);
-                    }
-                } else if(lastRank >= 1 && lastRank % 2 == 1) {
-                    float lastData;
-                    MPI_Recv(&lastData, 1, MPI_FLOAT, lastRank - 1, 0, comm, MPI_STATUS_IGNORE);
-                    if(lastData > myDataBuf[0]) {
-                        isSorted = false;
-                    }
-                }
+                
             }
         } else {
-            // Even stage
+            // Even phase
             if(rank % 2 == 0) {
-                if(rank < lastRank) {
-                    int recvSize;
-                    MPI_Recv(&recvSize, 1, MPI_INT, rank + 1, 0, comm, MPI_STATUS_IGNORE);
-                    MPI_Recv(adjDataBuf, recvSize, MPI_FLOAT, rank + 1, 0, comm, MPI_STATUS_IGNORE);
-                    if(myDataBuf[handleSize - 1] > adjDataBuf[0]) {
-                        isSorted = false;
-                        mergeSort(myDataBuf, handleSize, adjDataBuf, recvSize);
-                        MPI_Send(adjDataBuf, recvSize, MPI_FLOAT, rank + 1, 0, comm);
-                    } else {
-                        MPI_Send(adjDataBuf, recvSize, MPI_FLOAT, rank + 1, 0, comm);
-                    }
-                } else if(lastRank >= 1 && lastRank % 2 == 0) {
-                    // Rank == lastRank
-                    float lastData;
-                    MPI_Recv(&lastData, 1, MPI_FLOAT, lastRank - 1, 0, comm, MPI_STATUS_IGNORE);
-                    if(lastData > myDataBuf[0]) {
-                        isSorted = false;
-                    }
-                }
+                
             } else {
-                if(rank > 0) {
-                    MPI_Send(&handleSize, 1, MPI_INT, rank - 1, 0, comm);
-                    MPI_Send(myDataBuf, handleSize, MPI_FLOAT, rank - 1, 0, comm);
-                    MPI_Recv(myDataBuf, handleSize, MPI_FLOAT, rank - 1, 0, comm, MPI_STATUS_IGNORE);
-                    if(lastRank >= 1 && lastRank % 2 == 0 && rank == lastRank - 1) {
-                        MPI_Send(myDataBuf + handleSize - 1, 1, MPI_FLOAT, lastRank, 0, comm);
-                    }
-                }
+                
             }
         }
-        isOddStage = !isOddStage;
+        isOddPhase = !isOddPhase;
         MPI_Allreduce(&isSorted, &isSortedAll, 1, MPI_C_BOOL, MPI_LAND, comm);
     }
 
     // MPI write file
+    LABEL_WRITE:
     MPI_File fout;
     MPI_File_open(comm, outFileName, MPI_MODE_CREATE | MPI_MODE_WRONLY, MPI_INFO_NULL, &fout);
     MPI_File_write_at_all(fout, offset, myDataBuf, handleSize, MPI_FLOAT, MPI_STATUS_IGNORE);
