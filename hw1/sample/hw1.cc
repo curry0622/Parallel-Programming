@@ -123,7 +123,7 @@ int main(int argc, char** argv) {
     // MPI read file
     MPI_File fin;
     MPI_File_open(comm, inFileName, MPI_MODE_RDONLY, MPI_INFO_NULL, &fin);
-    MPI_File_read_at_all(fin, offset, myDataBuf, mySize, MPI_FLOAT, MPI_STATUS_IGNORE);
+    MPI_File_read_at(fin, offset, myDataBuf, mySize, MPI_FLOAT, MPI_STATUS_IGNORE);
     MPI_File_close(&fin);
 
     // Initial sort
@@ -278,7 +278,7 @@ int main(int argc, char** argv) {
     // MPI write file
     MPI_File fout;
     MPI_File_open(comm, outFileName, MPI_MODE_CREATE | MPI_MODE_WRONLY, MPI_INFO_NULL, &fout);
-    MPI_File_write_at_all(fout, offset, myDataBuf, mySize, MPI_FLOAT, MPI_STATUS_IGNORE);
+    MPI_File_write_at(fout, offset, myDataBuf, mySize, MPI_FLOAT, MPI_STATUS_IGNORE);
     MPI_File_close(&fout);
     
     // MPI finalize
