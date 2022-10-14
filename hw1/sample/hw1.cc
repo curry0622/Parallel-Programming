@@ -1,5 +1,5 @@
 #include <mpi.h>
-#include <boost/sort/spreadsort/spreadsort.hpp>
+#include <boost/sort/spreadsort/float_sort.hpp>
 // #include <stdio.h>
 // #include <stdlib.h>
 // #include <cstring>
@@ -8,22 +8,22 @@
 // #include <algorithm>
 // #include <iostream>
 
-int getOffset(const int rank, const int size, const int arrSize) {
+int getOffset(const int* rank, const int* size, const int* arrSize) {
     int offset = 0;
-    int left = arrSize % size;
-    int base = arrSize / size;
-    if (rank < left)
-        offset = rank * (base + 1);
+    int left = (*arrSize) % (*size);
+    int base = (*arrSize) / (*size);
+    if (*rank < left)
+        offset = *rank * (base + 1);
     else
-        offset = left * (base + 1) + (rank - left) * base;
+        offset = left * (base + 1) + (*rank - left) * base;
     return offset;
 }
 
-int getFirstBiggerThanTargetIndex(const float* arr, const int size, const float target) {
-    int low = 0, high = size;
+int getFirstBiggerThanTargetIndex(const float* arr, const int* size, const float* target) {
+    int low = 0, high = *size;
     while(low != high) {
         int mid = (low + high) / 2;
-        if(*(arr + mid) <= target)
+        if(*(arr + mid) <= *target)
             low = mid + 1;
         else
             high = mid;
@@ -31,10 +31,10 @@ int getFirstBiggerThanTargetIndex(const float* arr, const int size, const float 
     return low;
 }
 
-void mergeData(float* myDataBuf, const int mySize, const float* recvDataBuf, const int recvSize, float* funcBuf, const bool fromMin) {
+void mergeData(float* myDataBuf, const int* mySize, const float* recvDataBuf, const int* recvSize, float* funcBuf, const bool fromMin) {
     if(fromMin) {
         int i = 0, j = 0;
-        while(i < mySize && j < recvSize && i + j < mySize) {
+        while(i < *mySize && j < *recvSize && i + j < *mySize) {
             if(*(myDataBuf + i) < *(recvDataBuf + j)) {
                 *(funcBuf + i + j) = *(myDataBuf + i);
                 i++;
@@ -43,17 +43,17 @@ void mergeData(float* myDataBuf, const int mySize, const float* recvDataBuf, con
                 j++;
             }
         }
-        while (i < mySize && i + j < mySize) {
+        while (i < *mySize && i + j < *mySize) {
             *(funcBuf + i + j) = *(myDataBuf + i);
             i++;
         }
-        while (j < recvSize && i + j < mySize) {
+        while (j < *recvSize && i + j < *mySize) {
             *(funcBuf + i + j) = *(recvDataBuf + j);
             j++;
         }
     } else {
-        int i = mySize - 1, j = recvSize - 1;
-        int idx = mySize - 1;
+        int i = *mySize - 1, j = *recvSize - 1;
+        int idx = *mySize - 1;
         while(i >= 0 && j >= 0 && idx >= 0) {
             if(*(myDataBuf + i) > *(recvDataBuf + j)) {
                 *(funcBuf + idx) = *(myDataBuf + i);
@@ -75,7 +75,7 @@ void mergeData(float* myDataBuf, const int mySize, const float* recvDataBuf, con
             idx--;
         }
     }
-    memcpy(myDataBuf, funcBuf, sizeof(float) * mySize);
+    memcpy(myDataBuf, funcBuf, sizeof(float) * (*mySize));
 }
 
 int main(int argc, char** argv) {
@@ -100,9 +100,7 @@ int main(int argc, char** argv) {
     MPI_Comm_size(MPI_COMM_WORLD, &size);
 
     // Get args
-    const int arrSize = atoi(argv[1]);
-    const char* inFileName = argv[2];
-    const char* outFileName = argv[3];
+    const int arrSize = atoi(*(argv + 1));
 
     // Exclude processes when arrSize < size
     MPI_Comm comm = MPI_COMM_WORLD;
@@ -124,7 +122,7 @@ int main(int argc, char** argv) {
     int left = arrSize % size;
     if (rank < left)
         mySize++;
-    MPI_Offset offset = getOffset(rank, size, arrSize) * sizeof(float);
+    MPI_Offset offset = getOffset(&rank, &size, &arrSize) * sizeof(float);
 
     // Allocate memory
     float* myDataBuf = (float*)malloc(sizeof(float) * (mySize + 1));
@@ -134,7 +132,7 @@ int main(int argc, char** argv) {
     // MPI read file
     // timeTmp = MPI_Wtime();
     MPI_File fin;
-    MPI_File_open(comm, inFileName, MPI_MODE_RDONLY, MPI_INFO_NULL, &fin);
+    MPI_File_open(comm, *(argv + 2), MPI_MODE_RDONLY, MPI_INFO_NULL, &fin);
     MPI_File_read_at(fin, offset, myDataBuf, mySize, MPI_FLOAT, MPI_STATUS_IGNORE);
     MPI_File_close(&fin);
     // timeIO += MPI_Wtime() - timeTmp;
@@ -142,7 +140,8 @@ int main(int argc, char** argv) {
 
     // Initial sort
     // timeTmp = MPI_Wtime();
-    boost::sort::spreadsort::spreadsort(myDataBuf, myDataBuf + mySize);
+    boost::sort::spreadsort::float_sort(myDataBuf, myDataBuf + mySize);
+    // RadixSort8(myDataBuf, mySize);
     // timeCPUSort += MPI_Wtime() - timeTmp;
 
     // Odd even sort
@@ -161,7 +160,7 @@ int main(int argc, char** argv) {
                     float recvData;
                     // timeTmp = MPI_Wtime();
                     MPI_Recv(&recvData, 1, MPI_FLOAT, 1, 0, comm, MPI_STATUS_IGNORE);
-                    if(recvData < myDataBuf[mySize - 1]) {
+                    if(recvData < *(myDataBuf + mySize - 1)) {
                         isSorted = false;
                     }
                     // timeComm += MPI_Wtime() - timeTmp;
@@ -179,7 +178,7 @@ int main(int argc, char** argv) {
                         float recvData;
                         // timeTmp = MPI_Wtime();
                         MPI_Recv(&recvData, 1, MPI_FLOAT, size - 2, 0, comm, MPI_STATUS_IGNORE);
-                        if(recvData > myDataBuf[0]) {
+                        if(recvData > *myDataBuf) {
                             isSorted = false;
                         }
                         // timeComm += MPI_Wtime() - timeTmp;
@@ -198,7 +197,7 @@ int main(int argc, char** argv) {
                     float recvData;
                     // timeTmp = MPI_Wtime();
                     MPI_Recv(&recvData, 1, MPI_FLOAT, size - 2, 0, comm, MPI_STATUS_IGNORE);
-                    if(recvData > myDataBuf[0]) {
+                    if(recvData > *myDataBuf) {
                         isSorted = false;
                     }
                     // timeComm += MPI_Wtime() - timeTmp;
@@ -226,7 +225,7 @@ int main(int argc, char** argv) {
                 if(recvMax > *(myDataBuf)) {
                     isSorted = false;
                     // Send and recv size
-                    int sendSize = getFirstBiggerThanTargetIndex(myDataBuf, mySize, recvMax);
+                    int sendSize = getFirstBiggerThanTargetIndex(myDataBuf, &mySize, &recvMax);
                     int recvSize;
                     // timeTmp = MPI_Wtime();
                     MPI_Sendrecv(
@@ -244,7 +243,7 @@ int main(int argc, char** argv) {
                     // timeComm += MPI_Wtime() - timeTmp;
                     // Merge data
                     // timeTmp = MPI_Wtime();
-                    mergeData(myDataBuf, mySize, recvDataBuf, recvSize, funcBuf, false);
+                    mergeData(myDataBuf, &mySize, recvDataBuf, &recvSize, funcBuf, false);
                     // timeCPUMerge += MPI_Wtime() - timeTmp;
                 }
             } else {
@@ -260,7 +259,7 @@ int main(int argc, char** argv) {
                 if(recvMin < *(myDataBuf + mySize - 1)) {
                     isSorted = false;
                     // Send and recv size
-                    int sendSize = mySize - getFirstBiggerThanTargetIndex(myDataBuf, mySize, recvMin);
+                    int sendSize = mySize - getFirstBiggerThanTargetIndex(myDataBuf, &mySize, &recvMin);
                     int recvSize;
                     // timeTmp = MPI_Wtime();
                     MPI_Sendrecv(
@@ -278,7 +277,7 @@ int main(int argc, char** argv) {
                     // timeComm += MPI_Wtime() - timeTmp;
                     // Merge data
                     // timeTmp = MPI_Wtime();
-                    mergeData(myDataBuf, mySize, recvDataBuf, recvSize, funcBuf, true);
+                    mergeData(myDataBuf, &mySize, recvDataBuf, &recvSize, funcBuf, true);
                     // timeCPUMerge += MPI_Wtime() - timeTmp;
                 }
             }
@@ -293,7 +292,7 @@ int main(int argc, char** argv) {
     // MPI write file
     // timeTmp = MPI_Wtime();
     MPI_File fout;
-    MPI_File_open(comm, outFileName, MPI_MODE_CREATE | MPI_MODE_WRONLY, MPI_INFO_NULL, &fout);
+    MPI_File_open(comm, *(argv + 3), MPI_MODE_CREATE | MPI_MODE_WRONLY, MPI_INFO_NULL, &fout);
     MPI_File_write_at(fout, offset, myDataBuf, mySize, MPI_FLOAT, MPI_STATUS_IGNORE);
     MPI_File_close(&fout);
     // timeIO += MPI_Wtime() - timeTmp;
