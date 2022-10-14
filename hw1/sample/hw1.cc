@@ -117,9 +117,8 @@ int main(int argc, char** argv) {
         }
     }
 
-    // Set mySize and sendSize
+    // Set mySize
     int mySize = arrSize / size;
-    int sendSize = (arrSize / size) / 2 + 1;
     int left = arrSize % size;
     if (rank < left)
         mySize++;
@@ -142,7 +141,6 @@ int main(int argc, char** argv) {
     // Initial sort
     // timeTmp = MPI_Wtime();
     boost::sort::spreadsort::float_sort(myDataBuf, myDataBuf + mySize);
-    // RadixSort8(myDataBuf, mySize);
     // timeCPUSort += MPI_Wtime() - timeTmp;
 
     // Odd even sort
@@ -153,6 +151,7 @@ int main(int argc, char** argv) {
         // timeTmp2 = MPI_Wtime();
         while(!isSortedAll) {
             bool isSorted = true;
+            int sendSize = (arrSize / size) / 2 + 1;
 
             // Edge cases
             if(isOddPhase) {
@@ -227,16 +226,27 @@ int main(int argc, char** argv) {
                     isSorted = false;
                     // Send and recv data
                     // timeTmp = MPI_Wtime();
+                    int tmp = getFirstBiggerThanTargetIndex(myDataBuf, &mySize, &recvMax);
+                    if(tmp < sendSize) {
+                        sendSize = tmp;
+                    }
+                    int recvSize;
+                    // // timeTmp = MPI_Wtime();
+                    MPI_Sendrecv(
+                        &sendSize, 1, MPI_INT, rank - 1, 0,
+                        &recvSize, 1, MPI_INT, rank - 1, 0,
+                        comm, MPI_STATUS_IGNORE
+                    );
                     MPI_Sendrecv(
                         myDataBuf, sendSize, MPI_FLOAT, rank - 1, 0,
-                        recvDataBuf, sendSize, MPI_FLOAT, rank - 1, 0,
+                        recvDataBuf, recvSize, MPI_FLOAT, rank - 1, 0,
                         comm, MPI_STATUS_IGNORE
                     );
                     // timeCommBuf += MPI_Wtime() - timeTmp;
                     // timeComm += MPI_Wtime() - timeTmp;
                     // Merge data
                     // timeTmp = MPI_Wtime();
-                    mergeData(myDataBuf, &mySize, recvDataBuf, &sendSize, funcBuf, false);
+                    mergeData(myDataBuf, &mySize, recvDataBuf, &recvSize, funcBuf, false);
                     // timeCPUMerge += MPI_Wtime() - timeTmp;
                 }
             } else {
@@ -253,16 +263,27 @@ int main(int argc, char** argv) {
                     isSorted = false;
                     // Send and recv data
                     // timeTmp = MPI_Wtime();
+                    int tmp = mySize - getFirstBiggerThanTargetIndex(myDataBuf, &mySize, &recvMin);
+                    if(tmp < sendSize) {
+                        sendSize = tmp;
+                    }
+                    int recvSize;
+                    // // timeTmp = MPI_Wtime();
+                    MPI_Sendrecv(
+                        &sendSize, 1, MPI_INT, rank + 1, 0,
+                        &recvSize, 1, MPI_INT, rank + 1, 0,
+                        comm, MPI_STATUS_IGNORE
+                    );
                     MPI_Sendrecv(
                         myDataBuf + mySize - sendSize, sendSize, MPI_FLOAT, rank + 1, 0,
-                        recvDataBuf, sendSize, MPI_FLOAT, rank + 1, 0,
+                        recvDataBuf, recvSize, MPI_FLOAT, rank + 1, 0,
                         comm, MPI_STATUS_IGNORE
                     );
                     // timeCommBuf += MPI_Wtime() - timeTmp;
                     // timeComm += MPI_Wtime() - timeTmp;
                     // Merge data
                     // timeTmp = MPI_Wtime();
-                    mergeData(myDataBuf, &mySize, recvDataBuf, &sendSize, funcBuf, true);
+                    mergeData(myDataBuf, &mySize, recvDataBuf, &recvSize, funcBuf, true);
                     // timeCPUMerge += MPI_Wtime() - timeTmp;
                 }
             }
