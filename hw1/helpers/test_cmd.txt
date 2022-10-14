@@ -31,8 +31,8 @@ srun -N2 -n24 -c1 ./hw1 64123483 /home/pp22/share/hw1/testcases/30.in out
 srun -N2 -n24 -c1 ./hw1 64123487 /home/pp22/share/hw1/testcases/31.in out
 srun -N2 -n24 -c1 ./hw1 64123513 /home/pp22/share/hw1/testcases/32.in out
 srun -N1 -n12 -c1 ./hw1 536869888 /home/pp22/share/hw1/testcases/33.in out
-srun -N1 -n12 -c1 ./hw1 4536869888 /home/pp22/share/hw1/testcases/34.in out
-srun -N1 -n12 -c1 ./hw1 4536869888 /home/pp22/share/hw1/testcases/35.in out
+srun -N1 -n12 -c1 ./hw1 536869888 /home/pp22/share/hw1/testcases/34.in out
+srun -N1 -n12 -c1 ./hw1 536869888 /home/pp22/share/hw1/testcases/35.in out
 srun -N1 -n12 -c1 ./hw1 536869888 /home/pp22/share/hw1/testcases/36.in out
 srun -N3 -n24 -c1 ./hw1 536869888 /home/pp22/share/hw1/testcases/37.in out
 srun -N3 -n12 -c1 ./hw1 536831999 /home/pp22/share/hw1/testcases/38.in out
