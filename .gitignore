@@ -1,1 +1,8 @@
 .DS_Store
+a.out
+.token
+.cmd
+.vscode
+hw1/sample/hw1
+out
+log.txt
