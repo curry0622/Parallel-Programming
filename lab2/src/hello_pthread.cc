@@ -15,8 +15,8 @@ int main(int argc, char* argv[]) {
     pthread_t threads[num_threads];
     int rc;
     int ID[num_threads];
-    int t;
-    for (t = 0; t < num_threads; t++) {
+
+    for (int t = 0; t < num_threads; t++) {
         ID[t] = t;
         printf("In main: creating thread %d\n", t);
         rc = pthread_create(&threads[t], NULL, hello, (void*)&ID[t]);
