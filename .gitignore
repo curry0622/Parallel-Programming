@@ -6,3 +6,6 @@ a.out
 hw1/sample/hw1
 out
 log.txt
+lab2_hybrid
+lab2_pthread
+lab2_omp
