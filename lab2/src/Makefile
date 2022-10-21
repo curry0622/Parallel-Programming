@@ -1,6 +1,6 @@
 CC = gcc
 CXX = g++
-CFLAGS = -lm -O3
+CFLAGS = -lm -O3 -march=native -pipe
 lab2_pthread: CFLAGS += -pthread
 lab2_omp: CFLAGS += -fopenmp
 lab2_hybrid: CC = mpicc
