@@ -19,7 +19,7 @@ void* calcPixels(void* tArgs) {
     threadArgs* args = (threadArgs*)tArgs;
     int threadID = args->threadID;
     unsigned long long tmpPixels = 0;
-    
+
     // Calculate range
     unsigned long long start = threadID * (r / threadNum);
     unsigned long long end = (threadID + 1) * (r / threadNum);
