@@ -11,29 +11,17 @@
 #include <pthread.h>
 #include <iostream>
 
-/* Global variables */
-int thread_num = 0;
+// Global variables
 int* image;
+int thread_num = 0;
 int iters;
-double left, right, lower, upper;
 int width, height;
+int curr_x_start = 0, curr_y_start = 0;
+int calc_width = 100, calc_height = 100;
+double left, right, lower, upper;
 double x_step, y_step;
 
-/* Struct for threads */
-struct thread_args {
-    int x_start;
-    int x_end;
-    int y_start;
-    int y_end;
-};
-
-void* calc_mandelbrot_set(void* t_args) {
-    thread_args* args = (thread_args*)t_args;
-    int x_start = args->x_start;
-    int x_end = args->x_end;
-    int y_start = args->y_start;
-    int y_end = args->y_end;
-
+void calc_mandelbrot_set(int x_start, int x_end, int y_start, int y_end) {
     for(int j = y_start; j < y_end; ++j) {
         double y0 = j * y_step + lower;
         for(int i = x_start; i < x_end; ++i) {
@@ -53,6 +41,53 @@ void* calc_mandelbrot_set(void* t_args) {
             image[j * width + i] = repeats;
         }
     }
+}
+
+void* thread_func(void* thread_id) {
+    while(true) {
+        // Declare variables
+        int x_start, x_end, y_start, y_end;
+
+        // Entry section
+        pthread_mutex_t mutex;
+        pthread_mutex_init(&mutex, NULL);
+        pthread_mutex_lock(&mutex);
+
+        // Critical section
+        if(curr_y_start >= height) {
+            pthread_mutex_unlock(&mutex);
+            pthread_mutex_destroy(&mutex);
+            break;
+        }
+
+        x_start = curr_x_start;
+        x_end = x_start + calc_width;
+        y_start = curr_y_start;
+        y_end = y_start + calc_height;
+
+        if(x_end > width) {
+            x_end = width;
+        }
+        if(y_end > height) {
+            y_end = height;
+        }
+
+        curr_x_start = x_end;
+        if(curr_x_start >= width) {
+            curr_x_start = 0;
+            curr_y_start = y_end;
+        }
+
+        // Exit section
+        pthread_mutex_unlock(&mutex);
+        pthread_mutex_destroy(&mutex);
+
+        // Calculate
+        calc_mandelbrot_set(x_start, x_end, y_start, y_end);
+    }
+
+    // Exit
+    pthread_exit(NULL);
 }
 
 void write_png(const char* filename, int iters, int width, int height, const int* buffer) {
@@ -93,11 +128,11 @@ void write_png(const char* filename, int iters, int width, int height, const int
 }
 
 int main(int argc, char** argv) {
-    /* Detect how many CPUs are available */
+    // Detect how many CPUs are available
     cpu_set_t cpu_set;
     sched_getaffinity(0, sizeof(cpu_set), &cpu_set);
 
-    /* Argument parsing */
+    // Argument parsing
     assert(argc == 9);
     const char* filename = argv[1];
     iters = strtol(argv[2], 0, 10);
@@ -111,37 +146,25 @@ int main(int argc, char** argv) {
     x_step = (right - left) / width;
     y_step = (upper - lower) / height;
 
-    /* Allocate memory for image */
+    // Allocate memory for image
     image = (int*)malloc(width * height * sizeof(int));
     assert(image);
 
-    /* Create threads */
+    // Create threads
     thread_num = CPU_COUNT(&cpu_set);
     pthread_t threads[thread_num];
     int thread_id[thread_num];
-
-    /* Mandelbrot set */
-    for(int j = 0; j < height; ++j) {
-        double y0 = j * y_step + lower;
-        for(int i = 0; i < width; ++i) {
-            double x0 = i * x_step + left;
-
-            int repeats = 0;
-            double x = 0;
-            double y = 0;
-            double length_squared = 0;
-            while(repeats < iters && length_squared < 4) {
-                double temp = x * x - y * y + x0;
-                y = 2 * x * y + y0;
-                x = temp;
-                length_squared = x * x + y * y;
-                ++repeats;
-            }
-            image[j * width + i] = repeats;
-        }
+    for(int i = 0; i < thread_num; ++i) {
+        thread_id[i] = i;
+        pthread_create(&threads[i], NULL, thread_func, (void*)&thread_id[i]);
     }
 
-    /* Draw and cleanup */
+    // Join threads
+    for(int i = 0; i < thread_num; ++i) {
+        pthread_join(threads[i], NULL);
+    }
+
+    // Draw and cleanup
     write_png(filename, iters, width, height, image);
     free(image);
 }
