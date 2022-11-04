@@ -10,27 +10,36 @@
 #include <string.h>
 #include <pthread.h>
 #include <iostream>
+#include <chrono>
 
 // Global variables
 int* image;
-int thread_num = 0;
+int thread_num;
 int iters;
 int width, height;
 int curr_x_start = 0, curr_y_start = 0;
-int calc_width = 100, calc_height = 100;
+int calc_width = 128, calc_height = 128;
 double left, right, lower, upper;
 double x_step, y_step;
 
+// Thread struct
+struct thread_data {
+    int thread_id;
+    int iter;
+    double runtime;
+};
+
+// Calculate the mandelbrot set
 void calc_mandelbrot_set(int x_start, int x_end, int y_start, int y_end) {
     for(int j = y_start; j < y_end; ++j) {
         double y0 = j * y_step + lower;
         for(int i = x_start; i < x_end; ++i) {
             double x0 = i * x_step + left;
-
-            int repeats = 0;
             double x = 0;
             double y = 0;
             double length_squared = 0;
+            int repeats = 0;
+
             while(repeats < iters && length_squared < 4) {
                 double temp = x * x - y * y + x0;
                 y = 2 * x * y + y0;
@@ -38,13 +47,19 @@ void calc_mandelbrot_set(int x_start, int x_end, int y_start, int y_end) {
                 length_squared = x * x + y * y;
                 ++repeats;
             }
+
             image[j * width + i] = repeats;
         }
     }
 }
 
-void* thread_func(void* thread_id) {
+// Thread function
+void* thread_func(void* t_data) {
+    auto start = std::chrono::high_resolution_clock::now();
+    int iter = 0;
+
     while(true) {
+        iter++;
         // Declare variables
         int x_start, x_end, y_start, y_end;
 
@@ -85,12 +100,19 @@ void* thread_func(void* thread_id) {
         // Calculate
         calc_mandelbrot_set(x_start, x_end, y_start, y_end);
     }
+    
+    auto end = std::chrono::high_resolution_clock::now();
+    double thread_time = std::chrono::duration<double, std::milli>(end - start).count() / 1000;
+    ((thread_data*)t_data)->iter = iter;
+    ((thread_data*)t_data)->runtime = thread_time;
 
     // Exit
     pthread_exit(NULL);
 }
 
+// Write the image to a png file
 void write_png(const char* filename, int iters, int width, int height, const int* buffer) {
+    auto start = std::chrono::high_resolution_clock::now();
     FILE* fp = fopen(filename, "wb");
     assert(fp);
     png_structp png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
@@ -125,9 +147,19 @@ void write_png(const char* filename, int iters, int width, int height, const int
     png_write_end(png_ptr, NULL);
     png_destroy_write_struct(&png_ptr, &info_ptr);
     fclose(fp);
+    auto end = std::chrono::high_resolution_clock::now();
+    double img_time = std::chrono::duration<double, std::milli>(end - start).count() / 1000;
+    std::cout << "Image write time: " << img_time << " seconds" << std::endl;
+}
+
+// Set calculation parameters
+void set_calc_wh() {
+    calc_width = width;
+    calc_height = 1;
 }
 
 int main(int argc, char** argv) {
+    auto program_start = std::chrono::high_resolution_clock::now();
     // Detect how many CPUs are available
     cpu_set_t cpu_set;
     sched_getaffinity(0, sizeof(cpu_set), &cpu_set);
@@ -142,6 +174,7 @@ int main(int argc, char** argv) {
     upper = strtod(argv[6], 0);
     width = strtol(argv[7], 0, 10);
     height = strtol(argv[8], 0, 10);
+    std::cout << "Image size: " << width << " x " << height << " = " << width * height << std::endl;
 
     x_step = (right - left) / width;
     y_step = (upper - lower) / height;
@@ -150,21 +183,33 @@ int main(int argc, char** argv) {
     image = (int*)malloc(width * height * sizeof(int));
     assert(image);
 
+    // Set calc width and height
+    set_calc_wh();
+
     // Create threads
-    thread_num = CPU_COUNT(&cpu_set);
+    thread_num = CPU_COUNT(&cpu_set) * 2;
     pthread_t threads[thread_num];
     int thread_id[thread_num];
+    thread_data t_data[thread_num];
     for(int i = 0; i < thread_num; ++i) {
         thread_id[i] = i;
-        pthread_create(&threads[i], NULL, thread_func, (void*)&thread_id[i]);
+        t_data[i].thread_id = i;
+        int rc = pthread_create(&threads[i], NULL, thread_func, (void*)(t_data + i));
+        assert(rc == 0);
     }
 
     // Join threads
     for(int i = 0; i < thread_num; ++i) {
         pthread_join(threads[i], NULL);
+        std::cout << "Thread " << i << " runtime: " << t_data[i].runtime << " seconds, iter: " << t_data[i].iter << std::endl;
     }
 
     // Draw and cleanup
     write_png(filename, iters, width, height, image);
     free(image);
+    auto program_end = std::chrono::high_resolution_clock::now();
+    double elapsed_time = std::chrono::duration<double, std::milli>(program_end - program_start).count() / 1000;
+
+    // Print time
+    std::cout << "Elapsed time: " << elapsed_time << " s" << std::endl;
 }
