@@ -8,6 +8,52 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <pthread.h>
+#include <iostream>
+
+/* Global variables */
+int thread_num = 0;
+int* image;
+int iters;
+double left, right, lower, upper;
+int width, height;
+double x_step, y_step;
+
+/* Struct for threads */
+struct thread_args {
+    int x_start;
+    int x_end;
+    int y_start;
+    int y_end;
+};
+
+void* calc_mandelbrot_set(void* t_args) {
+    thread_args* args = (thread_args*)t_args;
+    int x_start = args->x_start;
+    int x_end = args->x_end;
+    int y_start = args->y_start;
+    int y_end = args->y_end;
+
+    for(int j = y_start; j < y_end; ++j) {
+        double y0 = j * y_step + lower;
+        for(int i = x_start; i < x_end; ++i) {
+            double x0 = i * x_step + left;
+
+            int repeats = 0;
+            double x = 0;
+            double y = 0;
+            double length_squared = 0;
+            while(repeats < iters && length_squared < 4) {
+                double temp = x * x - y * y + x0;
+                y = 2 * x * y + y0;
+                x = temp;
+                length_squared = x * x + y * y;
+                ++repeats;
+            }
+            image[j * width + i] = repeats;
+        }
+    }
+}
 
 void write_png(const char* filename, int iters, int width, int height, const int* buffer) {
     FILE* fp = fopen(filename, "wb");
@@ -47,37 +93,44 @@ void write_png(const char* filename, int iters, int width, int height, const int
 }
 
 int main(int argc, char** argv) {
-    /* detect how many CPUs are available */
+    /* Detect how many CPUs are available */
     cpu_set_t cpu_set;
     sched_getaffinity(0, sizeof(cpu_set), &cpu_set);
-    printf("%d cpus available\n", CPU_COUNT(&cpu_set));
 
-    /* argument parsing */
+    /* Argument parsing */
     assert(argc == 9);
     const char* filename = argv[1];
-    int iters = strtol(argv[2], 0, 10);
-    double left = strtod(argv[3], 0);
-    double right = strtod(argv[4], 0);
-    double lower = strtod(argv[5], 0);
-    double upper = strtod(argv[6], 0);
-    int width = strtol(argv[7], 0, 10);
-    int height = strtol(argv[8], 0, 10);
+    iters = strtol(argv[2], 0, 10);
+    left = strtod(argv[3], 0);
+    right = strtod(argv[4], 0);
+    lower = strtod(argv[5], 0);
+    upper = strtod(argv[6], 0);
+    width = strtol(argv[7], 0, 10);
+    height = strtol(argv[8], 0, 10);
 
-    /* allocate memory for image */
-    int* image = (int*)malloc(width * height * sizeof(int));
+    x_step = (right - left) / width;
+    y_step = (upper - lower) / height;
+
+    /* Allocate memory for image */
+    image = (int*)malloc(width * height * sizeof(int));
     assert(image);
 
-    /* mandelbrot set */
-    for (int j = 0; j < height; ++j) {
-        double y0 = j * ((upper - lower) / height) + lower;
-        for (int i = 0; i < width; ++i) {
-            double x0 = i * ((right - left) / width) + left;
+    /* Create threads */
+    thread_num = CPU_COUNT(&cpu_set);
+    pthread_t threads[thread_num];
+    int thread_id[thread_num];
+
+    /* Mandelbrot set */
+    for(int j = 0; j < height; ++j) {
+        double y0 = j * y_step + lower;
+        for(int i = 0; i < width; ++i) {
+            double x0 = i * x_step + left;
 
             int repeats = 0;
             double x = 0;
             double y = 0;
             double length_squared = 0;
-            while (repeats < iters && length_squared < 4) {
+            while(repeats < iters && length_squared < 4) {
                 double temp = x * x - y * y + x0;
                 y = 2 * x * y + y0;
                 x = temp;
@@ -88,7 +141,7 @@ int main(int argc, char** argv) {
         }
     }
 
-    /* draw and cleanup */
+    /* Draw and cleanup */
     write_png(filename, iters, width, height, image);
     free(image);
 }
