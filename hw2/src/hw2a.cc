@@ -11,6 +11,9 @@
 #include <pthread.h>
 #include <iostream>
 #include <chrono>
+#include <emmintrin.h>
+#include <smmintrin.h>
+#include <pmmintrin.h>
 
 // Global variables
 int* image;
@@ -34,6 +37,66 @@ void calc_mandelbrot_set(int x_start, int x_end, int y_start, int y_end) {
     for(int j = y_start; j < y_end; ++j) {
         double y0 = j * y_step + lower;
         for(int i = x_start; i < x_end; ++i) {
+            double x0 = i * x_step + left;
+            double x = 0;
+            double y = 0;
+            double length_squared = 0;
+            int repeats = 0;
+
+            while(repeats < iters && length_squared < 4) {
+                double temp = x * x - y * y + x0;
+                y = 2 * x * y + y0;
+                x = temp;
+                length_squared = x * x + y * y;
+                ++repeats;
+            }
+
+            image[j * width + i] = repeats;
+        }
+    }
+}
+
+// Calculate the mandelbrot set using SSE
+void calc_mandelbrot_set_sse(int x_start, int x_end, int y_start, int y_end) {
+    for(int j = y_start; j < y_end; ++j) {
+        double y0 = j * y_step + lower;
+        __m128d y00 = _mm_set1_pd(y0); // y00 = [64(y0), 64(y0)]
+        int x_end1 = (x_end >> 1) << 1;
+
+        for(int i = x_start; i < x_end1; i += 2) {
+            __m128d x0 = _mm_set_pd((i + 1) * x_step + left, i * x_step + left); // x0 = [64(i + 1), 64(i)]
+            __m128d x = _mm_setzero_pd(); // x = [0..0]
+            __m128d y = _mm_setzero_pd(); // y = [0..0]
+            __m128d length_squared = _mm_setzero_pd(); // length_squared = [0..0]
+            __m128i repeats = _mm_setzero_si128(); // repeats = [0..0]
+
+            int cond[2] = {
+                _mm_movemask_ps(_mm_castsi128_ps(_mm_cmplt_epi32(repeats, _mm_set1_epi32(iters)))), // [0, 1, 2, 3], ... 15
+                _mm_movemask_pd(_mm_cmplt_pd(length_squared, _mm_set1_pd(4))) // 0, 1, 2, 3
+            };
+
+            while(((cond[0] & 1) && (cond[1] & 1)) || (((cond[0] >> 1) & 1) && ((cond[1] >> 1) & 1))) {
+                __m128d temp = _mm_add_pd(_mm_sub_pd(_mm_mul_pd(x, x), _mm_mul_pd(y, y)), x0);
+                y = _mm_add_pd(_mm_mul_pd(_mm_mul_pd(x, y), _mm_set1_pd(2)), y00);
+                x = temp;
+                length_squared = _mm_add_pd(_mm_mul_pd(x, x), _mm_mul_pd(y, y));
+
+                if((cond[0] & 1) && (cond[1] & 1)) {
+                    repeats = _mm_add_epi32(repeats, _mm_set_epi32(0, 0, 0, 1));
+                }
+                if(((cond[0] >> 1) & 1) && ((cond[1] >> 1) & 1)) {
+                    repeats = _mm_add_epi32(repeats, _mm_set_epi32(0, 0, 1, 0));
+                }
+
+                cond[0] = _mm_movemask_ps(_mm_castsi128_ps(_mm_cmplt_epi32(repeats, _mm_set1_epi32(iters))));
+                cond[1] = _mm_movemask_pd(_mm_cmplt_pd(length_squared, _mm_set1_pd(4)));
+            }
+
+            image[j * width + i] = _mm_extract_epi32(repeats, 0);
+            image[j * width + i + 1] = _mm_extract_epi32(repeats, 1);
+        }
+
+        for(int i = x_end1; i < x_end; ++i) {
             double x0 = i * x_step + left;
             double x = 0;
             double y = 0;
@@ -98,7 +161,8 @@ void* thread_func(void* t_data) {
         pthread_mutex_destroy(&mutex);
 
         // Calculate
-        calc_mandelbrot_set(x_start, x_end, y_start, y_end);
+        // calc_mandelbrot_set(x_start, x_end, y_start, y_end);
+        calc_mandelbrot_set_sse(x_start, x_end, y_start, y_end);
     }
     
     auto end = std::chrono::high_resolution_clock::now();
@@ -187,7 +251,7 @@ int main(int argc, char** argv) {
     set_calc_wh();
 
     // Create threads
-    thread_num = CPU_COUNT(&cpu_set) * 2;
+    thread_num = CPU_COUNT(&cpu_set);
     pthread_t threads[thread_num];
     int thread_id[thread_num];
     thread_data t_data[thread_num];
@@ -201,7 +265,7 @@ int main(int argc, char** argv) {
     // Join threads
     for(int i = 0; i < thread_num; ++i) {
         pthread_join(threads[i], NULL);
-        std::cout << "Thread " << i << " runtime: " << t_data[i].runtime << " seconds, iter: " << t_data[i].iter << std::endl;
+        std::cout << "Thread " << i << " runtime: " << t_data[i].runtime << " seconds, iteration: " << t_data[i].iter << std::endl;
     }
 
     // Draw and cleanup
