@@ -191,17 +191,19 @@ void write_png(const char* filename, int iters, int width, int height, const int
     png_set_compression_level(png_ptr, 1);
     size_t row_size = 3 * width * sizeof(png_byte);
     png_bytep row = (png_bytep)malloc(row_size);
-    for (int y = 0; y < height; ++y) {
+    for(int y = 0; y < height; ++y) {
         memset(row, 0, row_size);
-        for (int x = 0; x < width; ++x) {
+        for(int x = 0; x < width; ++x) {
             int p = buffer[(height - 1 - y) * width + x];
             png_bytep color = row + x * 3;
-            if (p != iters) {
-                if (p & 16) {
+            if(p != iters) {
+                if(p & 16) {
                     color[0] = 240;
                     color[1] = color[2] = p % 16 * 16;
+                    // color[1] = color[2] = (p & 15) << 4;
                 } else {
                     color[0] = p % 16 * 16;
+                    // color[0] = (p & 15) << 4;
                 }
             }
         }
@@ -218,7 +220,7 @@ void write_png(const char* filename, int iters, int width, int height, const int
 
 // Set calculation parameters
 void set_calc_wh() {
-    calc_width = 1024;
+    calc_width = width;
     calc_height = 1;
 }
 
