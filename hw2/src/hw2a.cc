@@ -218,7 +218,7 @@ void write_png(const char* filename, int iters, int width, int height, const int
 
 // Set calculation parameters
 void set_calc_wh() {
-    calc_width = width;
+    calc_width = 1024;
     calc_height = 1;
 }
 
