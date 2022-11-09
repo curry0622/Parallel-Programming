@@ -40,6 +40,14 @@ void calc_lsqr(double* x, double* y, double* x0, double* y0, double* lsqr) {
     *lsqr = (*x) * (*x) + (*y) * (*y);
 }
 
+// Calculate the length_squared using SSE
+void calc_lsqr_sse(__m128d* x, __m128d* y, __m128d* x0, __m128d* y0, __m128d* lsqr) {
+    __m128d temp = _mm_add_pd(_mm_sub_pd(_mm_mul_pd(*x, *x), _mm_mul_pd(*y, *y)), *x0);
+    *y = _mm_add_pd(_mm_mul_pd(_mm_mul_pd(*x, *y), _mm_set1_pd(2)), *y0);
+    *x = temp;
+    *lsqr = _mm_add_pd(_mm_mul_pd(*x, *x), _mm_mul_pd(*y, *y));
+}
+
 // Calculate the mandelbrot set
 void calc_mandelbrot_set(int x_start, int x_end, int y_start, int y_end) {
     for(int j = y_start; j < y_end; ++j) {
@@ -52,10 +60,6 @@ void calc_mandelbrot_set(int x_start, int x_end, int y_start, int y_end) {
             int repeats = 0;
 
             while(repeats < iters && length_squared < 4) {
-                // double temp = x * x - y * y + x0;
-                // y = 2 * x * y + y0;
-                // x = temp;
-                // length_squared = x * x + y * y;
                 calc_lsqr(&x, &y, &x0, &y0, &length_squared);
                 ++repeats;
             }
@@ -63,14 +67,6 @@ void calc_mandelbrot_set(int x_start, int x_end, int y_start, int y_end) {
             image[j * width + i] = repeats;
         }
     }
-}
-
-// Calculate the length_squared using SSE
-void calc_lsqr_sse(__m128d* x, __m128d* y, __m128d* x0, __m128d* y0, __m128d* lsqr) {
-    __m128d temp = _mm_add_pd(_mm_sub_pd(_mm_mul_pd(*x, *x), _mm_mul_pd(*y, *y)), *x0);
-    *y = _mm_add_pd(_mm_mul_pd(_mm_mul_pd(*x, *y), _mm_set1_pd(2)), *y0);
-    *x = temp;
-    *lsqr = _mm_add_pd(_mm_mul_pd(*x, *x), _mm_mul_pd(*y, *y));
 }
 
 // Calculate the mandelbrot set using SSE
@@ -119,10 +115,6 @@ void calc_mandelbrot_set_sse(int x_start, int x_end, int y_start, int y_end) {
             int repeats = 0;
 
             while(repeats < iters && length_squared < 4) {
-                // double temp = x * x - y * y + x0;
-                // y = 2 * x * y + y0;
-                // x = temp;
-                // length_squared = x * x + y * y;
                 calc_lsqr(&x, &y, &x0, &y0, &length_squared);
                 ++repeats;
             }
@@ -135,7 +127,8 @@ void calc_mandelbrot_set_sse(int x_start, int x_end, int y_start, int y_end) {
 // Calculate the mandelbrot set using SSE with channel method
 void calc_mandelbrot_set_sse_v2(int x_start, int x_end, int y_start, int y_end) {
     // Initialize
-    int total_num = (x_end - x_start) * (y_end - y_start);
+    int x_num = x_end - x_start;
+    int total_num = x_num * (y_end - y_start);
     int curr_idx = 0;
     int idx[2] = {0, 0};
     int repeats[2] = {0, 0};
@@ -151,30 +144,32 @@ void calc_mandelbrot_set_sse_v2(int x_start, int x_end, int y_start, int y_end) 
 
     while(!finished[0] || !finished[1]) {
         // Reset
-        if(reset[0]) { // right channel (lsb)
-            idx[0] = curr_idx;
+        if(!finished[0] && reset[0]) { // right channel (lsb)
+            reset[0] = false;
+            repeats[0] = 0;
+            ge[0] = false;
+            idx[0] = curr_idx++;
             x = _mm_move_sd(x, _mm_setzero_pd());
             y = _mm_move_sd(y, _mm_setzero_pd());
-            x0 = _mm_move_sd(x0, _mm_set_sd((x_start + ((idx[0] + 1) % (x_end - x_start))) * x_step + left));
-            y0 = _mm_move_sd(y0, _mm_set_sd((y_start + ((idx[0] + 1) / (x_end - x_start))) * y_step + lower));
-            repeats[0] = 0;
-            reset[0] = false;
-            ge[0] = false;
-            curr_idx++;
+            x0 = _mm_move_sd(x0, _mm_set_pd1((x_start + idx[0] % x_num) * x_step + left));
+            y0 = _mm_move_sd(y0, _mm_set_pd1((y_start + idx[0] / x_num) * y_step + lower));
+            lsqr = _mm_move_sd(lsqr, _mm_setzero_pd());
+
             if(curr_idx > total_num) {
                 finished[0] = true;
             }
         }
-        if(reset[1]) { // left channel (msb)
-            idx[1] = curr_idx;
+        if(!finished[1] && reset[1]) { // left channel (msb)
+            reset[1] = false;
+            repeats[1] = 0;
+            ge[1] = false;
+            idx[1] = curr_idx++;
             x = _mm_move_sd(_mm_setzero_pd(), x);
             y = _mm_move_sd(_mm_setzero_pd(), y);
-            x0 = _mm_move_sd(_mm_set_sd((x_start + ((idx[1] + 1) % (x_end - x_start))) * x_step + left), x0);
-            y0 = _mm_move_sd(_mm_set_sd((y_start + ((idx[1] + 1) / (x_end - x_start))) * y_step + lower), y0);
-            repeats[1] = 0;
-            reset[1] = false;
-            ge[1] = false;
-            curr_idx++;
+            x0 = _mm_move_sd(_mm_set_pd1((x_start + idx[1] % x_num) * x_step + left), x0);
+            y0 = _mm_move_sd(_mm_set_pd1((y_start + idx[1] / x_num) * y_step + lower), y0);
+            lsqr = _mm_move_sd(_mm_setzero_pd(), lsqr);
+
             if(curr_idx > total_num) {
                 finished[1] = true;
             }
@@ -188,14 +183,14 @@ void calc_mandelbrot_set_sse_v2(int x_start, int x_end, int y_start, int y_end) 
 
         // Check and update
         if(!finished[0] && (repeats[0] >= iters || ge[0])) {
-            int i = x_start + ((idx[0] + 1) % (x_end - x_start));
-            int j = y_start + ((idx[0] + 1) / (x_end - x_start));
+            int i = x_start + idx[0] % x_num;
+            int j = y_start + idx[0] / x_num;
             image[j * width + i] = repeats[0];
             reset[0] = true;
         }
         if(!finished[1] && (repeats[1] >= iters || ge[1])) {
-            int i = x_start + ((idx[1] + 1) % (x_end - x_start));
-            int j = y_start + ((idx[1] + 1) / (x_end - x_start));
+            int i = x_start + idx[1] % x_num;
+            int j = y_start + idx[1] / x_num;
             image[j * width + i] = repeats[1];
             reset[1] = true;
         }
@@ -248,8 +243,8 @@ void* thread_func(void* t_data) {
 
         // Calculate
         // calc_mandelbrot_set(x_start, x_end, y_start, y_end);
-        // calc_mandelbrot_set_sse(x_start, x_end, y_start, y_end);
-        calc_mandelbrot_set_sse_v2(x_start, x_end, y_start, y_end);
+        calc_mandelbrot_set_sse(x_start, x_end, y_start, y_end);
+        // calc_mandelbrot_set_sse_v2(x_start, x_end, y_start, y_end);
     }
     
     auto end = std::chrono::high_resolution_clock::now();
@@ -311,6 +306,16 @@ void set_calc_wh() {
     calc_height = 1;
 }
 
+// Write image info
+void write_img_info() {
+    FILE* fp = fopen("v1.txt", "w");
+    assert(fp);
+    for(int i = 0; i < width * height; i++) {
+        fprintf(fp, "%d: %d\n", i, image[i]);
+    }
+    fclose(fp);
+}
+
 int main(int argc, char** argv) {
     auto program_start = std::chrono::high_resolution_clock::now();
     // Detect how many CPUs are available
@@ -356,6 +361,9 @@ int main(int argc, char** argv) {
         pthread_join(threads[i], NULL);
         std::cout << "Thread " << i << " runtime: " << t_data[i].runtime << " seconds, iteration: " << t_data[i].iter << std::endl;
     }
+
+    // Write image info
+    // write_img_info();
 
     // Draw and cleanup
     write_png(filename, iters, width, height, image);
