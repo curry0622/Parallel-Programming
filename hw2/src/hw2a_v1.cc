@@ -32,14 +32,6 @@ struct thread_data {
     double runtime;
 };
 
-// Calculate the length_squared
-void calc_lsqr(double* x, double* y, double* x0, double* y0, double* lsqr) {
-    double temp = (*x) * (*x) - (*y) * (*y) + (*x0);
-    *y = 2 * (*x) * (*y) + (*y0);
-    *x = temp;
-    *lsqr = (*x) * (*x) + (*y) * (*y);
-}
-
 // Calculate the mandelbrot set
 void calc_mandelbrot_set(int x_start, int x_end, int y_start, int y_end) {
     for(int j = y_start; j < y_end; ++j) {
@@ -52,25 +44,16 @@ void calc_mandelbrot_set(int x_start, int x_end, int y_start, int y_end) {
             int repeats = 0;
 
             while(repeats < iters && length_squared < 4) {
-                // double temp = x * x - y * y + x0;
-                // y = 2 * x * y + y0;
-                // x = temp;
-                // length_squared = x * x + y * y;
-                calc_lsqr(&x, &y, &x0, &y0, &length_squared);
+                double temp = x * x - y * y + x0;
+                y = 2 * x * y + y0;
+                x = temp;
+                length_squared = x * x + y * y;
                 ++repeats;
             }
 
             image[j * width + i] = repeats;
         }
     }
-}
-
-// Calculate the length_squared using SSE
-void calc_lsqr_sse(__m128d* x, __m128d* y, __m128d* x0, __m128d* y0, __m128d* lsqr) {
-    __m128d temp = _mm_add_pd(_mm_sub_pd(_mm_mul_pd(*x, *x), _mm_mul_pd(*y, *y)), *x0);
-    *y = _mm_add_pd(_mm_mul_pd(_mm_mul_pd(*x, *y), _mm_set1_pd(2)), *y0);
-    *x = temp;
-    *lsqr = _mm_add_pd(_mm_mul_pd(*x, *x), _mm_mul_pd(*y, *y));
 }
 
 // Calculate the mandelbrot set using SSE
@@ -93,8 +76,10 @@ void calc_mandelbrot_set_sse(int x_start, int x_end, int y_start, int y_end) {
             };
 
             while(((cond[0] & 1) && (cond[1] & 1)) || (((cond[0] >> 1) & 1) && ((cond[1] >> 1) & 1))) {
-                // Calculate length_squared
-                calc_lsqr_sse(&x, &y, &x0, &y00, &length_squared);
+                __m128d temp = _mm_add_pd(_mm_sub_pd(_mm_mul_pd(x, x), _mm_mul_pd(y, y)), x0);
+                y = _mm_add_pd(_mm_mul_pd(_mm_mul_pd(x, y), _mm_set1_pd(2)), y00);
+                x = temp;
+                length_squared = _mm_add_pd(_mm_mul_pd(x, x), _mm_mul_pd(y, y));
 
                 if((cond[0] & 1) && (cond[1] & 1)) {
                     repeats = _mm_add_epi32(repeats, _mm_set_epi32(0, 0, 0, 1));
@@ -119,85 +104,14 @@ void calc_mandelbrot_set_sse(int x_start, int x_end, int y_start, int y_end) {
             int repeats = 0;
 
             while(repeats < iters && length_squared < 4) {
-                // double temp = x * x - y * y + x0;
-                // y = 2 * x * y + y0;
-                // x = temp;
-                // length_squared = x * x + y * y;
-                calc_lsqr(&x, &y, &x0, &y0, &length_squared);
+                double temp = x * x - y * y + x0;
+                y = 2 * x * y + y0;
+                x = temp;
+                length_squared = x * x + y * y;
                 ++repeats;
             }
 
             image[j * width + i] = repeats;
-        }
-    }
-}
-
-// Calculate the mandelbrot set using SSE with channel method
-void calc_mandelbrot_set_sse_v2(int x_start, int x_end, int y_start, int y_end) {
-    // Initialize
-    int total_num = (x_end - x_start) * (y_end - y_start);
-    int curr_idx = 0;
-    int idx[2] = {0, 0};
-    int repeats[2] = {0, 0};
-    bool reset[2] = {true, true};
-    bool ge[2] = {false, false}; // greater or equal
-    bool finished[2] = {false, false};
-
-    __m128d x = _mm_setzero_pd();
-    __m128d y = _mm_setzero_pd();
-    __m128d x0 = _mm_setzero_pd();
-    __m128d y0 = _mm_setzero_pd();
-    __m128d lsqr = _mm_setzero_pd();
-
-    while(!finished[0] || !finished[1]) {
-        // Reset
-        if(reset[0]) { // right channel (lsb)
-            idx[0] = curr_idx;
-            x = _mm_move_sd(x, _mm_setzero_pd());
-            y = _mm_move_sd(y, _mm_setzero_pd());
-            x0 = _mm_move_sd(x0, _mm_set_sd((x_start + ((idx[0] + 1) % (x_end - x_start))) * x_step + left));
-            y0 = _mm_move_sd(y0, _mm_set_sd((y_start + ((idx[0] + 1) / (x_end - x_start))) * y_step + lower));
-            repeats[0] = 0;
-            reset[0] = false;
-            ge[0] = false;
-            curr_idx++;
-            if(curr_idx > total_num) {
-                finished[0] = true;
-            }
-        }
-        if(reset[1]) { // left channel (msb)
-            idx[1] = curr_idx;
-            x = _mm_move_sd(_mm_setzero_pd(), x);
-            y = _mm_move_sd(_mm_setzero_pd(), y);
-            x0 = _mm_move_sd(_mm_set_sd((x_start + ((idx[1] + 1) % (x_end - x_start))) * x_step + left), x0);
-            y0 = _mm_move_sd(_mm_set_sd((y_start + ((idx[1] + 1) / (x_end - x_start))) * y_step + lower), y0);
-            repeats[1] = 0;
-            reset[1] = false;
-            ge[1] = false;
-            curr_idx++;
-            if(curr_idx > total_num) {
-                finished[1] = true;
-            }
-        }
-
-        // Calc
-        calc_lsqr_sse(&x, &y, &x0, &y0, &lsqr);
-        int cmpge = _mm_movemask_pd(_mm_cmpge_pd(lsqr, _mm_set1_pd(4)));
-        ge[0] = cmpge & 1, ge[1] = cmpge & 2;
-        repeats[0]++, repeats[1]++;
-
-        // Check and update
-        if(!finished[0] && (repeats[0] >= iters || ge[0])) {
-            int i = x_start + ((idx[0] + 1) % (x_end - x_start));
-            int j = y_start + ((idx[0] + 1) / (x_end - x_start));
-            image[j * width + i] = repeats[0];
-            reset[0] = true;
-        }
-        if(!finished[1] && (repeats[1] >= iters || ge[1])) {
-            int i = x_start + ((idx[1] + 1) % (x_end - x_start));
-            int j = y_start + ((idx[1] + 1) / (x_end - x_start));
-            image[j * width + i] = repeats[1];
-            reset[1] = true;
         }
     }
 }
@@ -248,8 +162,7 @@ void* thread_func(void* t_data) {
 
         // Calculate
         // calc_mandelbrot_set(x_start, x_end, y_start, y_end);
-        // calc_mandelbrot_set_sse(x_start, x_end, y_start, y_end);
-        calc_mandelbrot_set_sse_v2(x_start, x_end, y_start, y_end);
+        calc_mandelbrot_set_sse(x_start, x_end, y_start, y_end);
     }
     
     auto end = std::chrono::high_resolution_clock::now();
@@ -286,11 +199,11 @@ void write_png(const char* filename, int iters, int width, int height, const int
             if(p != iters) {
                 if(p & 16) {
                     color[0] = 240;
-                    // color[1] = color[2] = p % 16 * 16;
-                    color[1] = color[2] = (p & 15) << 4;
+                    color[1] = color[2] = p % 16 * 16;
+                    // color[1] = color[2] = (p & 15) << 4;
                 } else {
-                    // color[0] = p % 16 * 16;
-                    color[0] = (p & 15) << 4;
+                    color[0] = p % 16 * 16;
+                    // color[0] = (p & 15) << 4;
                 }
             }
         }
