@@ -145,7 +145,7 @@ void calc_mandelbrot_set_sse_v2(int x_start, int x_end, int y_start, int y_end) 
 
     while(!finished[0] || !finished[1]) {
         // Reset
-        if(!finished[0] && reset[0]) { // right channel (lsb)
+        if(reset[0] && !finished[0]) { // right channel (lsb)
             reset[0] = false;
             repeats[0] = 0;
             ge[0] = false;
@@ -160,7 +160,7 @@ void calc_mandelbrot_set_sse_v2(int x_start, int x_end, int y_start, int y_end) 
                 finished[0] = true;
             }
         }
-        if(!finished[1] && reset[1]) { // left channel (msb)
+        if(reset[1] && !finished[1]) { // left channel (msb)
             reset[1] = false;
             repeats[1] = 0;
             ge[1] = false;
@@ -183,13 +183,13 @@ void calc_mandelbrot_set_sse_v2(int x_start, int x_end, int y_start, int y_end) 
         repeats[0]++, repeats[1]++;
 
         // Check and update
-        if(!finished[0] && (repeats[0] >= iters || ge[0])) {
+        if((repeats[0] >= iters || ge[0]) && !finished[0]) {
             // int i = x_start + idx[0] % x_num;
             // int j = y_start + idx[0] / x_num;
             image[(y_start + idx[0] / x_num) * width + (x_start + idx[0] % x_num)] = repeats[0];
             reset[0] = true;
         }
-        if(!finished[1] && (repeats[1] >= iters || ge[1])) {
+        if((repeats[1] >= iters || ge[1]) && !finished[1]) {
             // int i = x_start + idx[1] % x_num;
             // int j = y_start + idx[1] / x_num;
             image[(y_start + idx[1] / x_num) * width + (x_start + idx[1] % x_num)] = repeats[1];
@@ -200,7 +200,7 @@ void calc_mandelbrot_set_sse_v2(int x_start, int x_end, int y_start, int y_end) 
 
 // Thread function
 void* thread_func(void* t_data) {
-    // auto start = std::chrono::high_resolution_clock::now();
+    auto start = std::chrono::high_resolution_clock::now();
     int iter = 0;
 
     while(true) {
@@ -248,10 +248,10 @@ void* thread_func(void* t_data) {
         calc_mandelbrot_set_sse_v2(x_start, x_end, y_start, y_end);
     }
     
-    // auto end = std::chrono::high_resolution_clock::now();
-    // double thread_time = std::chrono::duration<double, std::milli>(end - start).count() / 1000;
+    auto end = std::chrono::high_resolution_clock::now();
+    double thread_time = std::chrono::duration<double, std::milli>(end - start).count() / 1000;
     ((thread_data*)t_data)->iter = iter;
-    // ((thread_data*)t_data)->runtime = thread_time;
+    ((thread_data*)t_data)->runtime = thread_time;
 
     // Exit
     pthread_exit(NULL);
@@ -318,7 +318,7 @@ void write_img_info() {
 }
 
 int main(int argc, char** argv) {
-    // auto program_start = std::chrono::high_resolution_clock::now();
+    auto program_start = std::chrono::high_resolution_clock::now();
     // Detect how many CPUs are available
     cpu_set_t cpu_set;
     sched_getaffinity(0, sizeof(cpu_set), &cpu_set);
@@ -360,7 +360,7 @@ int main(int argc, char** argv) {
     // Join threads
     for(int i = 0; i < thread_num; ++i) {
         pthread_join(threads[i], NULL);
-        // std::cout << "Thread " << i << " runtime: " << t_data[i].runtime << " seconds, iteration: " << t_data[i].iter << std::endl;
+        std::cout << "Thread " << i << " runtime: " << t_data[i].runtime << " seconds, iteration: " << t_data[i].iter << std::endl;
     }
 
     // Write image info
@@ -369,9 +369,9 @@ int main(int argc, char** argv) {
     // Draw and cleanup
     write_png(filename, iters, width, height, image);
     free(image);
-    // auto program_end = std::chrono::high_resolution_clock::now();
-    // double elapsed_time = std::chrono::duration<double, std::milli>(program_end - program_start).count() / 1000;
+    auto program_end = std::chrono::high_resolution_clock::now();
+    double elapsed_time = std::chrono::duration<double, std::milli>(program_end - program_start).count() / 1000;
 
     // Print time
-    // std::cout << "Elapsed time: " << elapsed_time << " s" << std::endl;
+    std::cout << "Elapsed time: " << elapsed_time << " s" << std::endl;
 }
