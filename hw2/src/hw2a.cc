@@ -136,11 +136,12 @@ void calc_mandelbrot_set_sse_v2(int x_start, int x_end, int y_start, int y_end) 
     bool ge[2] = {false, false}; // greater or equal
     bool finished[2] = {false, false};
 
-    __m128d x = _mm_setzero_pd();
-    __m128d y = _mm_setzero_pd();
-    __m128d x0 = _mm_setzero_pd();
-    __m128d y0 = _mm_setzero_pd();
-    __m128d lsqr = _mm_setzero_pd();
+    __m128d zerod = _mm_setzero_pd();
+    __m128d x = zerod;
+    __m128d y = zerod;
+    __m128d x0 = zerod;
+    __m128d y0 = zerod;
+    __m128d lsqr = zerod;
 
     while(!finished[0] || !finished[1]) {
         // Reset
@@ -149,11 +150,11 @@ void calc_mandelbrot_set_sse_v2(int x_start, int x_end, int y_start, int y_end) 
             repeats[0] = 0;
             ge[0] = false;
             idx[0] = curr_idx++;
-            x = _mm_move_sd(x, _mm_setzero_pd());
-            y = _mm_move_sd(y, _mm_setzero_pd());
+            x = _mm_move_sd(x, zerod);
+            y = _mm_move_sd(y, zerod);
             x0 = _mm_move_sd(x0, _mm_set_pd1((x_start + idx[0] % x_num) * x_step + left));
             y0 = _mm_move_sd(y0, _mm_set_pd1((y_start + idx[0] / x_num) * y_step + lower));
-            lsqr = _mm_move_sd(lsqr, _mm_setzero_pd());
+            lsqr = _mm_move_sd(lsqr, zerod);
 
             if(curr_idx > total_num) {
                 finished[0] = true;
@@ -164,11 +165,11 @@ void calc_mandelbrot_set_sse_v2(int x_start, int x_end, int y_start, int y_end) 
             repeats[1] = 0;
             ge[1] = false;
             idx[1] = curr_idx++;
-            x = _mm_move_sd(_mm_setzero_pd(), x);
-            y = _mm_move_sd(_mm_setzero_pd(), y);
+            x = _mm_move_sd(zerod, x);
+            y = _mm_move_sd(zerod, y);
             x0 = _mm_move_sd(_mm_set_pd1((x_start + idx[1] % x_num) * x_step + left), x0);
             y0 = _mm_move_sd(_mm_set_pd1((y_start + idx[1] / x_num) * y_step + lower), y0);
-            lsqr = _mm_move_sd(_mm_setzero_pd(), lsqr);
+            lsqr = _mm_move_sd(zerod, lsqr);
 
             if(curr_idx > total_num) {
                 finished[1] = true;
@@ -183,15 +184,15 @@ void calc_mandelbrot_set_sse_v2(int x_start, int x_end, int y_start, int y_end) 
 
         // Check and update
         if(!finished[0] && (repeats[0] >= iters || ge[0])) {
-            int i = x_start + idx[0] % x_num;
-            int j = y_start + idx[0] / x_num;
-            image[j * width + i] = repeats[0];
+            // int i = x_start + idx[0] % x_num;
+            // int j = y_start + idx[0] / x_num;
+            image[(y_start + idx[0] / x_num) * width + (x_start + idx[0] % x_num)] = repeats[0];
             reset[0] = true;
         }
         if(!finished[1] && (repeats[1] >= iters || ge[1])) {
-            int i = x_start + idx[1] % x_num;
-            int j = y_start + idx[1] / x_num;
-            image[j * width + i] = repeats[1];
+            // int i = x_start + idx[1] % x_num;
+            // int j = y_start + idx[1] / x_num;
+            image[(y_start + idx[1] / x_num) * width + (x_start + idx[1] % x_num)] = repeats[1];
             reset[1] = true;
         }
     }
@@ -199,7 +200,7 @@ void calc_mandelbrot_set_sse_v2(int x_start, int x_end, int y_start, int y_end) 
 
 // Thread function
 void* thread_func(void* t_data) {
-    auto start = std::chrono::high_resolution_clock::now();
+    // auto start = std::chrono::high_resolution_clock::now();
     int iter = 0;
 
     while(true) {
@@ -243,14 +244,14 @@ void* thread_func(void* t_data) {
 
         // Calculate
         // calc_mandelbrot_set(x_start, x_end, y_start, y_end);
-        calc_mandelbrot_set_sse(x_start, x_end, y_start, y_end);
-        // calc_mandelbrot_set_sse_v2(x_start, x_end, y_start, y_end);
+        // calc_mandelbrot_set_sse(x_start, x_end, y_start, y_end);
+        calc_mandelbrot_set_sse_v2(x_start, x_end, y_start, y_end);
     }
     
-    auto end = std::chrono::high_resolution_clock::now();
-    double thread_time = std::chrono::duration<double, std::milli>(end - start).count() / 1000;
+    // auto end = std::chrono::high_resolution_clock::now();
+    // double thread_time = std::chrono::duration<double, std::milli>(end - start).count() / 1000;
     ((thread_data*)t_data)->iter = iter;
-    ((thread_data*)t_data)->runtime = thread_time;
+    // ((thread_data*)t_data)->runtime = thread_time;
 
     // Exit
     pthread_exit(NULL);
@@ -317,7 +318,7 @@ void write_img_info() {
 }
 
 int main(int argc, char** argv) {
-    auto program_start = std::chrono::high_resolution_clock::now();
+    // auto program_start = std::chrono::high_resolution_clock::now();
     // Detect how many CPUs are available
     cpu_set_t cpu_set;
     sched_getaffinity(0, sizeof(cpu_set), &cpu_set);
@@ -332,7 +333,7 @@ int main(int argc, char** argv) {
     upper = strtod(argv[6], 0);
     width = strtol(argv[7], 0, 10);
     height = strtol(argv[8], 0, 10);
-    std::cout << "Image size: " << width << " x " << height << " = " << width * height << std::endl;
+    // std::cout << "Image size: " << width << " x " << height << " = " << width * height << std::endl;
 
     x_step = (right - left) / width;
     y_step = (upper - lower) / height;
@@ -359,7 +360,7 @@ int main(int argc, char** argv) {
     // Join threads
     for(int i = 0; i < thread_num; ++i) {
         pthread_join(threads[i], NULL);
-        std::cout << "Thread " << i << " runtime: " << t_data[i].runtime << " seconds, iteration: " << t_data[i].iter << std::endl;
+        // std::cout << "Thread " << i << " runtime: " << t_data[i].runtime << " seconds, iteration: " << t_data[i].iter << std::endl;
     }
 
     // Write image info
@@ -368,9 +369,9 @@ int main(int argc, char** argv) {
     // Draw and cleanup
     write_png(filename, iters, width, height, image);
     free(image);
-    auto program_end = std::chrono::high_resolution_clock::now();
-    double elapsed_time = std::chrono::duration<double, std::milli>(program_end - program_start).count() / 1000;
+    // auto program_end = std::chrono::high_resolution_clock::now();
+    // double elapsed_time = std::chrono::duration<double, std::milli>(program_end - program_start).count() / 1000;
 
     // Print time
-    std::cout << "Elapsed time: " << elapsed_time << " s" << std::endl;
+    // std::cout << "Elapsed time: " << elapsed_time << " s" << std::endl;
 }
