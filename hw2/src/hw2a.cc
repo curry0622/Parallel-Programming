@@ -25,6 +25,12 @@ int calc_width = 128, calc_height = 128;
 double left, right, lower, upper;
 double x_step, y_step;
 
+// Packed doubles
+union pd {
+    __m128d dd;
+    double d[2];
+};
+
 // Thread struct
 struct thread_data {
     int thread_id;
@@ -46,6 +52,14 @@ void calc_lsqr_sse(__m128d* x, __m128d* y, __m128d* x0, __m128d* y0, __m128d* ls
     *y = _mm_add_pd(_mm_mul_pd(_mm_mul_pd(*x, *y), _mm_set1_pd(2)), *y0);
     *x = temp;
     *lsqr = _mm_add_pd(_mm_mul_pd(*x, *x), _mm_mul_pd(*y, *y));
+}
+
+void calc_lsqr_sse_pd(pd* x, pd* y, pd* x0, pd* y0, pd* lsqr) {
+    pd temp;
+    temp.dd = _mm_add_pd(_mm_sub_pd(_mm_mul_pd(x->dd, x->dd), _mm_mul_pd(y->dd, y->dd)), x0->dd);
+    y->dd = _mm_add_pd(_mm_mul_pd(_mm_mul_pd(x->dd, y->dd), _mm_set1_pd(2)), y0->dd);
+    x->dd = temp.dd;
+    lsqr->dd = _mm_add_pd(_mm_mul_pd(x->dd, x->dd), _mm_mul_pd(y->dd, y->dd));
 }
 
 // Calculate the mandelbrot set
@@ -136,12 +150,12 @@ void calc_mandelbrot_set_sse_v2(int x_start, int x_end, int y_start, int y_end) 
     bool ge[2] = {false, false}; // greater or equal
     bool finished[2] = {false, false};
 
-    __m128d zerod = _mm_setzero_pd();
-    __m128d x = zerod;
-    __m128d y = zerod;
-    __m128d x0 = zerod;
-    __m128d y0 = zerod;
-    __m128d lsqr = zerod;
+    __m128d zero = _mm_setzero_pd(), four = _mm_set1_pd(4);
+    __m128d x = zero;
+    __m128d y = zero;
+    __m128d x0 = zero;
+    __m128d y0 = zero;
+    __m128d lsqr = zero;
 
     while(!finished[0] || !finished[1]) {
         // Reset
@@ -150,11 +164,11 @@ void calc_mandelbrot_set_sse_v2(int x_start, int x_end, int y_start, int y_end) 
             repeats[0] = 0;
             ge[0] = false;
             idx[0] = curr_idx++;
-            x = _mm_move_sd(x, zerod);
-            y = _mm_move_sd(y, zerod);
+            x = _mm_move_sd(x, zero);
+            y = _mm_move_sd(y, zero);
             x0 = _mm_move_sd(x0, _mm_set_pd1((x_start + idx[0] % x_num) * x_step + left));
             y0 = _mm_move_sd(y0, _mm_set_pd1((y_start + idx[0] / x_num) * y_step + lower));
-            lsqr = _mm_move_sd(lsqr, zerod);
+            lsqr = _mm_move_sd(lsqr, zero);
 
             if(curr_idx > total_num) {
                 finished[0] = true;
@@ -165,11 +179,11 @@ void calc_mandelbrot_set_sse_v2(int x_start, int x_end, int y_start, int y_end) 
             repeats[1] = 0;
             ge[1] = false;
             idx[1] = curr_idx++;
-            x = _mm_move_sd(zerod, x);
-            y = _mm_move_sd(zerod, y);
+            x = _mm_move_sd(zero, x);
+            y = _mm_move_sd(zero, y);
             x0 = _mm_move_sd(_mm_set_pd1((x_start + idx[1] % x_num) * x_step + left), x0);
             y0 = _mm_move_sd(_mm_set_pd1((y_start + idx[1] / x_num) * y_step + lower), y0);
-            lsqr = _mm_move_sd(zerod, lsqr);
+            lsqr = _mm_move_sd(zero, lsqr);
 
             if(curr_idx > total_num) {
                 finished[1] = true;
@@ -178,20 +192,79 @@ void calc_mandelbrot_set_sse_v2(int x_start, int x_end, int y_start, int y_end) 
 
         // Calc
         calc_lsqr_sse(&x, &y, &x0, &y0, &lsqr);
-        int cmpge = _mm_movemask_pd(_mm_cmpge_pd(lsqr, _mm_set1_pd(4)));
+        int cmpge = _mm_movemask_pd(_mm_cmpge_pd(lsqr, four));
         ge[0] = cmpge & 1, ge[1] = cmpge & 2;
         repeats[0]++, repeats[1]++;
 
         // Check and update
         if((ge[0] || repeats[0] >= iters) && !finished[0]) {
-            // int i = x_start + idx[0] % x_num;
-            // int j = y_start + idx[0] / x_num;
             image[(y_start + idx[0] / x_num) * width + (x_start + idx[0] % x_num)] = repeats[0];
             reset[0] = true;
         }
         if((ge[1] || repeats[1] >= iters) && !finished[1]) {
-            // int i = x_start + idx[1] % x_num;
-            // int j = y_start + idx[1] / x_num;
+            image[(y_start + idx[1] / x_num) * width + (x_start + idx[1] % x_num)] = repeats[1];
+            reset[1] = true;
+        }
+    }
+}
+
+// Calculate the mandelbrot set using SSE with channel method
+void calc_mandelbrot_set_sse_v3(int x_start, int x_end, int y_start, int y_end) {
+    // Initialize
+    int x_num = x_end - x_start;
+    int total_num = x_num * (y_end - y_start);
+    int curr_idx = 0;
+    int idx[2] = {0, 0};
+    int repeats[2] = {0, 0};
+    bool reset[2] = {true, true};
+    bool ge[2] = {false, false}; // greater or equal
+    bool finished[2] = {false, false};
+
+    pd x, y, x0, y0, lsqr;
+
+    while(!finished[0] || !finished[1]) {
+        // Reset
+        if(reset[0] && !finished[0]) { // right channel (lsb)
+            reset[0] = false;
+            repeats[0] = 0;
+            ge[0] = false;
+            idx[0] = curr_idx++;
+            x.d[0] = 0;
+            y.d[0] = 0;
+            x0.d[0] = (x_start + idx[0] % x_num) * x_step + left;
+            y0.d[0] = (y_start + idx[0] / x_num) * y_step + lower;
+            lsqr.d[0] = 0;
+
+            if(curr_idx > total_num) {
+                finished[0] = true;
+            }
+        }
+        if(reset[1] && !finished[1]) { // left channel (msb)
+            reset[1] = false;
+            repeats[1] = 0;
+            ge[1] = false;
+            idx[1] = curr_idx++;
+            x.d[1] = 0;
+            y.d[1] = 0;
+            x0.d[1] = (x_start + idx[1] % x_num) * x_step + left;
+            y0.d[1] = (y_start + idx[1] / x_num) * y_step + lower;
+            lsqr.d[1] = 0;
+
+            if(curr_idx > total_num) {
+                finished[1] = true;
+            }
+        }
+
+        // Calc
+        calc_lsqr_sse_pd(&x, &y, &x0, &y0, &lsqr);
+        repeats[0]++, repeats[1]++;
+
+        // Check and update
+        if((lsqr.d[0] >= 4 || repeats[0] >= iters) && !finished[0]) {
+            image[(y_start + idx[0] / x_num) * width + (x_start + idx[0] % x_num)] = repeats[0];
+            reset[0] = true;
+        }
+        if((lsqr.d[1] >= 4 || repeats[1] >= iters) && !finished[1]) {
             image[(y_start + idx[1] / x_num) * width + (x_start + idx[1] % x_num)] = repeats[1];
             reset[1] = true;
         }
@@ -246,6 +319,7 @@ void* thread_func(void* t_data) {
         // calc_mandelbrot_set(x_start, x_end, y_start, y_end);
         // calc_mandelbrot_set_sse(x_start, x_end, y_start, y_end);
         calc_mandelbrot_set_sse_v2(x_start, x_end, y_start, y_end);
+        // calc_mandelbrot_set_sse_v3(x_start, x_end, y_start, y_end);
     }
     
     auto end = std::chrono::high_resolution_clock::now();
