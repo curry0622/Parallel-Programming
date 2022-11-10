@@ -337,6 +337,76 @@ void calc_mandelbrot_set_sse_v4(int x_start, int x_end, int y_start, int y_end) 
     }
 }
 
+// Calculate the mandelbrot set using SSE with channel method
+void calc_mandelbrot_set_sse_v5(int x_start, int x_end, int y_start, int y_end) {
+    // Initialize
+    int curr_idx = 0;
+    int idx[2] = {curr_idx++, curr_idx++};
+    int repeats[2] = {0, 0};
+    bool ge[2] = {false, false}; // greater or equal
+    bool finished[2] = {false, false};
+
+    __m128d zero = _mm_setzero_pd(), two = _mm_set1_pd(2), four = _mm_set1_pd(4);
+    __m128d x = zero;
+    __m128d y = zero;
+    __m128d x0 = _mm_set_pd((x_start + idx[1]) * x_step + left, (x_start + idx[0]) * x_step + left);
+    __m128d y0 = _mm_set_pd1(y_start * y_step + lower);
+    __m128d lsqr = zero;
+
+    while(!finished[0] && !finished[1]) {
+        // Calculation
+        __m128d temp = _mm_add_pd(_mm_sub_pd(_mm_mul_pd(x, x), _mm_mul_pd(y, y)), x0);
+        y = _mm_add_pd(_mm_mul_pd(_mm_mul_pd(x, y), two), y0);
+        x = temp;
+        lsqr = _mm_add_pd(_mm_mul_pd(x, x), _mm_mul_pd(y, y));
+        int cmpge = _mm_movemask_pd(_mm_cmpge_pd(lsqr, four));
+        ge[0] = cmpge & 1, ge[1] = cmpge & 2;
+        repeats[0]++, repeats[1]++;
+
+        // Check and update
+        if((ge[0] || repeats[0] >= iters) && !finished[0]) {
+            // Update image
+            image[y_start * width + (x_start + idx[0])] = repeats[0];
+
+            // Reset
+            repeats[0] = 0;
+            ge[0] = false;
+            idx[0] = curr_idx++;
+            x = _mm_move_sd(x, zero);
+            y = _mm_move_sd(y, zero);
+            x0 = _mm_move_sd(x0, _mm_set_pd1((x_start + idx[0]) * x_step + left));
+            lsqr = _mm_move_sd(lsqr, zero);
+
+            if(curr_idx > calc_width) {
+                finished[0] = true;
+            }
+        }
+        if((ge[1] || repeats[1] >= iters) && !finished[1]) {
+            // Update image
+            image[y_start * width + (x_start + idx[1])] = repeats[1];
+
+            // Reset
+            repeats[1] = 0;
+            ge[1] = false;
+            idx[1] = curr_idx++;
+            x = _mm_move_sd(zero, x);
+            y = _mm_move_sd(zero, y);
+            x0 = _mm_move_sd(_mm_set_pd1((x_start + idx[1]) * x_step + left), x0);
+            lsqr = _mm_move_sd(zero, lsqr);
+
+            if(curr_idx > calc_width) {
+                finished[1] = true;
+            }
+        }
+    }
+
+    if(!finished[0]) {
+        calc_mandelbrot_set(x_start + idx[0], x_end, y_start, y_end);
+    }
+    if(!finished[1]) {
+        calc_mandelbrot_set(x_start + idx[1], x_end, y_start, y_end);
+    }
+}
 
 // Thread function
 void* thread_func(void* t_data) {
@@ -384,10 +454,11 @@ void* thread_func(void* t_data) {
 
         // Calculate
         // calc_mandelbrot_set(x_start, x_end, y_start, y_end);
-        calc_mandelbrot_set_sse(x_start, x_end, y_start, y_end);
+        // calc_mandelbrot_set_sse(x_start, x_end, y_start, y_end);
         // calc_mandelbrot_set_sse_v2(x_start, x_end, y_start, y_end);
         // calc_mandelbrot_set_sse_v3(x_start, x_end, y_start, y_end);
         // calc_mandelbrot_set_sse_v4(x_start, x_end, y_start, y_end);
+        calc_mandelbrot_set_sse_v5(x_start, x_end, y_start, y_end);
     }
     
     auto end = std::chrono::high_resolution_clock::now();
