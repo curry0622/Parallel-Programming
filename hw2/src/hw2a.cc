@@ -183,13 +183,13 @@ void calc_mandelbrot_set_sse_v2(int x_start, int x_end, int y_start, int y_end) 
         repeats[0]++, repeats[1]++;
 
         // Check and update
-        if((repeats[0] >= iters || ge[0]) && !finished[0]) {
+        if((ge[0] || repeats[0] >= iters) && !finished[0]) {
             // int i = x_start + idx[0] % x_num;
             // int j = y_start + idx[0] / x_num;
             image[(y_start + idx[0] / x_num) * width + (x_start + idx[0] % x_num)] = repeats[0];
             reset[0] = true;
         }
-        if((repeats[1] >= iters || ge[1]) && !finished[1]) {
+        if((ge[1] || repeats[1] >= iters) && !finished[1]) {
             // int i = x_start + idx[1] % x_num;
             // int j = y_start + idx[1] / x_num;
             image[(y_start + idx[1] / x_num) * width + (x_start + idx[1] % x_num)] = repeats[1];
