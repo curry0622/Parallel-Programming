@@ -54,6 +54,7 @@ void calc_lsqr_sse(__m128d* x, __m128d* y, __m128d* x0, __m128d* y0, __m128d* ls
     *lsqr = _mm_add_pd(_mm_mul_pd(*x, *x), _mm_mul_pd(*y, *y));
 }
 
+// Calculate the length_squared using SSE and packed doubles
 void calc_lsqr_sse_pd(pd* x, pd* y, pd* x0, pd* y0, pd* lsqr) {
     pd temp;
     temp.dd = _mm_add_pd(_mm_sub_pd(_mm_mul_pd(x->dd, x->dd), _mm_mul_pd(y->dd, y->dd)), x0->dd);
@@ -141,8 +142,7 @@ void calc_mandelbrot_set_sse(int x_start, int x_end, int y_start, int y_end) {
 // Calculate the mandelbrot set using SSE with channel method
 void calc_mandelbrot_set_sse_v2(int x_start, int x_end, int y_start, int y_end) {
     // Initialize
-    int x_num = x_end - x_start;
-    int total_num = x_num * (y_end - y_start);
+    int total_num = (x_end - x_start) * (y_end - y_start);
     int curr_idx = 0;
     int idx[2] = {0, 0};
     int repeats[2] = {0, 0};
@@ -150,11 +150,11 @@ void calc_mandelbrot_set_sse_v2(int x_start, int x_end, int y_start, int y_end) 
     bool ge[2] = {false, false}; // greater or equal
     bool finished[2] = {false, false};
 
-    __m128d zero = _mm_setzero_pd(), four = _mm_set1_pd(4);
+    __m128d zero = _mm_setzero_pd(), two = _mm_set1_pd(2), four = _mm_set1_pd(4);
     __m128d x = zero;
     __m128d y = zero;
     __m128d x0 = zero;
-    __m128d y0 = zero;
+    __m128d y0 = _mm_set_pd1(y_start * y_step + lower);
     __m128d lsqr = zero;
 
     while(!finished[0] || !finished[1]) {
@@ -166,8 +166,7 @@ void calc_mandelbrot_set_sse_v2(int x_start, int x_end, int y_start, int y_end) 
             idx[0] = curr_idx++;
             x = _mm_move_sd(x, zero);
             y = _mm_move_sd(y, zero);
-            x0 = _mm_move_sd(x0, _mm_set_pd1((x_start + idx[0] % x_num) * x_step + left));
-            y0 = _mm_move_sd(y0, _mm_set_pd1((y_start + idx[0] / x_num) * y_step + lower));
+            x0 = _mm_move_sd(x0, _mm_set_pd1((x_start + idx[0]) * x_step + left));
             lsqr = _mm_move_sd(lsqr, zero);
 
             if(curr_idx > total_num) {
@@ -181,8 +180,7 @@ void calc_mandelbrot_set_sse_v2(int x_start, int x_end, int y_start, int y_end) 
             idx[1] = curr_idx++;
             x = _mm_move_sd(zero, x);
             y = _mm_move_sd(zero, y);
-            x0 = _mm_move_sd(_mm_set_pd1((x_start + idx[1] % x_num) * x_step + left), x0);
-            y0 = _mm_move_sd(_mm_set_pd1((y_start + idx[1] / x_num) * y_step + lower), y0);
+            x0 = _mm_move_sd(_mm_set_pd1((x_start + idx[1]) * x_step + left), x0);
             lsqr = _mm_move_sd(zero, lsqr);
 
             if(curr_idx > total_num) {
@@ -190,25 +188,28 @@ void calc_mandelbrot_set_sse_v2(int x_start, int x_end, int y_start, int y_end) 
             }
         }
 
-        // Calc
-        calc_lsqr_sse(&x, &y, &x0, &y0, &lsqr);
+        // Calculation
+        __m128d temp = _mm_add_pd(_mm_sub_pd(_mm_mul_pd(x, x), _mm_mul_pd(y, y)), x0);
+        y = _mm_add_pd(_mm_mul_pd(_mm_mul_pd(x, y), two), y0);
+        x = temp;
+        lsqr = _mm_add_pd(_mm_mul_pd(x, x), _mm_mul_pd(y, y));
         int cmpge = _mm_movemask_pd(_mm_cmpge_pd(lsqr, four));
         ge[0] = cmpge & 1, ge[1] = cmpge & 2;
         repeats[0]++, repeats[1]++;
 
         // Check and update
         if((ge[0] || repeats[0] >= iters) && !finished[0]) {
-            image[(y_start + idx[0] / x_num) * width + (x_start + idx[0] % x_num)] = repeats[0];
+            image[y_start * width + (x_start + idx[0])] = repeats[0];
             reset[0] = true;
         }
         if((ge[1] || repeats[1] >= iters) && !finished[1]) {
-            image[(y_start + idx[1] / x_num) * width + (x_start + idx[1] % x_num)] = repeats[1];
+            image[y_start * width + (x_start + idx[1])] = repeats[1];
             reset[1] = true;
         }
     }
 }
 
-// Calculate the mandelbrot set using SSE with channel method
+// Calculate the mandelbrot set using SSE with channel method and packed doubles
 void calc_mandelbrot_set_sse_v3(int x_start, int x_end, int y_start, int y_end) {
     // Initialize
     int x_num = x_end - x_start;
@@ -308,7 +309,7 @@ void* thread_func(void* t_data) {
         curr_x_start = x_end;
         if(curr_x_start >= width) {
             curr_x_start = 0;
-            curr_y_start = y_end;
+            curr_y_start += calc_height;
         }
 
         // Exit section
@@ -407,7 +408,7 @@ int main(int argc, char** argv) {
     upper = strtod(argv[6], 0);
     width = strtol(argv[7], 0, 10);
     height = strtol(argv[8], 0, 10);
-    // std::cout << "Image size: " << width << " x " << height << " = " << width * height << std::endl;
+    std::cout << "Image size: " << width << " x " << height << " = " << width * height << std::endl;
 
     x_step = (right - left) / width;
     y_step = (upper - lower) / height;
