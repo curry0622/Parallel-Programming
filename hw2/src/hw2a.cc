@@ -395,51 +395,6 @@ void calc_mandelbrot_set_sse_v5(int x_start, int x_end, int y_start, int y_end) 
         }
     }
 
-    // while(!finished[0] && !finished[1]) {
-    //     // Calculation
-    //     calc_lsqr_sse(&x, &y, &x0, &y0, &lsqr);
-    //     // int cmpge = _mm_movemask_pd(_mm_cmpge_pd(lsqr, four));
-    //     // ge[0] = cmpge & 1, ge[1] = cmpge & 2;
-    //     repeats[0]++, repeats[1]++;
-
-    //     // Check and update
-    //     if((!_mm_comilt_sd(lsqr, four) || repeats[0] >= iters) && !finished[0]) {
-    //         // Update image
-    //         image[y_start * width + (x_start + idx[0])] = repeats[0];
-
-    //         // Reset
-    //         repeats[0] = 0;
-    //         ge[0] = false;
-    //         idx[0] = curr_idx++;
-    //         x = _mm_move_sd(x, zero);
-    //         y = _mm_move_sd(y, zero);
-    //         x0 = _mm_move_sd(x0, _mm_set_pd1((x_start + idx[0]) * x_step + left));
-    //         lsqr = _mm_move_sd(lsqr, zero);
-
-    //         if(curr_idx > calc_width) {
-    //             finished[0] = true;
-    //         }
-    //     }
-        
-    //     if((!_mm_comilt_sd(_mm_unpackhi_pd(lsqr, lsqr), four) || repeats[1] >= iters) && !finished[1]) {
-    //         // Update image
-    //         image[y_start * width + (x_start + idx[1])] = repeats[1];
-
-    //         // Reset
-    //         repeats[1] = 0;
-    //         ge[1] = false;
-    //         idx[1] = curr_idx++;
-    //         x = _mm_move_sd(zero, x);
-    //         y = _mm_move_sd(zero, y);
-    //         x0 = _mm_move_sd(_mm_set_pd1((x_start + idx[1]) * x_step + left), x0);
-    //         lsqr = _mm_move_sd(zero, lsqr);
-
-    //         if(curr_idx > calc_width) {
-    //             finished[1] = true;
-    //         }
-    //     }
-    // }
-
     if(idx[0] < calc_width) {
         calc_mandelbrot_set(x_start + idx[0], x_end, y_start, y_end);
     }
