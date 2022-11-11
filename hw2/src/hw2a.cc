@@ -354,16 +354,13 @@ void calc_mandelbrot_set_sse_v5(int x_start, int x_end, int y_start, int y_end) 
 
     while(!finished[0] && !finished[1]) {
         // Calculation
-        __m128d temp = _mm_add_pd(_mm_sub_pd(_mm_mul_pd(x, x), _mm_mul_pd(y, y)), x0);
-        y = _mm_add_pd(_mm_mul_pd(_mm_mul_pd(x, y), two), y0);
-        x = temp;
-        lsqr = _mm_add_pd(_mm_mul_pd(x, x), _mm_mul_pd(y, y));
-        int cmpge = _mm_movemask_pd(_mm_cmpge_pd(lsqr, four));
-        ge[0] = cmpge & 1, ge[1] = cmpge & 2;
+        calc_lsqr_sse(&x, &y, &x0, &y0, &lsqr);
+        // int cmpge = _mm_movemask_pd(_mm_cmpge_pd(lsqr, four));
+        // ge[0] = cmpge & 1, ge[1] = cmpge & 2;
         repeats[0]++, repeats[1]++;
 
         // Check and update
-        if((ge[0] || repeats[0] >= iters) && !finished[0]) {
+        if((!_mm_comilt_sd(lsqr, four) || repeats[0] >= iters) && !finished[0]) {
             // Update image
             image[y_start * width + (x_start + idx[0])] = repeats[0];
 
@@ -380,7 +377,7 @@ void calc_mandelbrot_set_sse_v5(int x_start, int x_end, int y_start, int y_end) 
                 finished[0] = true;
             }
         }
-        if((ge[1] || repeats[1] >= iters) && !finished[1]) {
+        if((!_mm_comilt_sd(_mm_unpackhi_pd(lsqr, lsqr), four) || repeats[1] >= iters) && !finished[1]) {
             // Update image
             image[y_start * width + (x_start + idx[1])] = repeats[1];
 
@@ -534,11 +531,11 @@ void* thread_func(void* t_data) {
 
         // Calculate
         // calc_mandelbrot_set(x_start, x_end, y_start, y_end);
-        calc_mandelbrot_set_sse(x_start, x_end, y_start, y_end);
+        // calc_mandelbrot_set_sse(x_start, x_end, y_start, y_end);
         // calc_mandelbrot_set_sse_v2(x_start, x_end, y_start, y_end);
         // calc_mandelbrot_set_sse_v3(x_start, x_end, y_start, y_end);
         // calc_mandelbrot_set_sse_v4(x_start, x_end, y_start, y_end);
-        // calc_mandelbrot_set_sse_v5(x_start, x_end, y_start, y_end);
+        calc_mandelbrot_set_sse_v5(x_start, x_end, y_start, y_end);
         // calc_mandelbrot_set_sse_v6(x_start, x_end, y_start, y_end);
     }
     
