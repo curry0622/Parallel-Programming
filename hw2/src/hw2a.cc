@@ -352,15 +352,22 @@ void calc_mandelbrot_set_sse_v5(int x_start, int x_end, int y_start, int y_end) 
     __m128d y0 = _mm_set_pd1(y_start * y_step + lower);
     __m128d lsqr = zero;
 
-    while(!finished[0] && !finished[1]) {
-        // Calculation
-        calc_lsqr_sse(&x, &y, &x0, &y0, &lsqr);
-        // int cmpge = _mm_movemask_pd(_mm_cmpge_pd(lsqr, four));
-        // ge[0] = cmpge & 1, ge[1] = cmpge & 2;
-        repeats[0]++, repeats[1]++;
+    while(idx[0] < calc_width && idx[1] < calc_width) {
+        bool ge[2] = {false, false}; // greater or equal
+        while(true) {
+            calc_lsqr_sse(&x, &y, &x0, &y0, &lsqr);
+            repeats[0]++, repeats[1]++;
+            int cmpge = _mm_movemask_pd(_mm_cmpge_pd(lsqr, four));
+            ge[0] = cmpge & 1, ge[1] = cmpge & 2;
+            // ge[0] = !_mm_comilt_sd(lsqr, four);
+            // ge[1] = !_mm_comilt_sd(_mm_unpackhi_pd(lsqr, lsqr), four);
 
-        // Check and update
-        if((!_mm_comilt_sd(lsqr, four) || repeats[0] >= iters) && !finished[0]) {
+            if(ge[0] || repeats[0] >= iters || ge[1] || repeats[1] >= iters) {
+                break;
+            }
+        }
+
+        if(ge[0] || repeats[0] >= iters) {
             // Update image
             image[y_start * width + (x_start + idx[0])] = repeats[0];
 
@@ -372,12 +379,8 @@ void calc_mandelbrot_set_sse_v5(int x_start, int x_end, int y_start, int y_end) 
             y = _mm_move_sd(y, zero);
             x0 = _mm_move_sd(x0, _mm_set_pd1((x_start + idx[0]) * x_step + left));
             lsqr = _mm_move_sd(lsqr, zero);
-
-            if(curr_idx > calc_width) {
-                finished[0] = true;
-            }
         }
-        if((!_mm_comilt_sd(_mm_unpackhi_pd(lsqr, lsqr), four) || repeats[1] >= iters) && !finished[1]) {
+        if(ge[1] || repeats[1] >= iters) {
             // Update image
             image[y_start * width + (x_start + idx[1])] = repeats[1];
 
@@ -389,17 +392,58 @@ void calc_mandelbrot_set_sse_v5(int x_start, int x_end, int y_start, int y_end) 
             y = _mm_move_sd(zero, y);
             x0 = _mm_move_sd(_mm_set_pd1((x_start + idx[1]) * x_step + left), x0);
             lsqr = _mm_move_sd(zero, lsqr);
-
-            if(curr_idx > calc_width) {
-                finished[1] = true;
-            }
         }
     }
 
-    if(!finished[0]) {
+    // while(!finished[0] && !finished[1]) {
+    //     // Calculation
+    //     calc_lsqr_sse(&x, &y, &x0, &y0, &lsqr);
+    //     // int cmpge = _mm_movemask_pd(_mm_cmpge_pd(lsqr, four));
+    //     // ge[0] = cmpge & 1, ge[1] = cmpge & 2;
+    //     repeats[0]++, repeats[1]++;
+
+    //     // Check and update
+    //     if((!_mm_comilt_sd(lsqr, four) || repeats[0] >= iters) && !finished[0]) {
+    //         // Update image
+    //         image[y_start * width + (x_start + idx[0])] = repeats[0];
+
+    //         // Reset
+    //         repeats[0] = 0;
+    //         ge[0] = false;
+    //         idx[0] = curr_idx++;
+    //         x = _mm_move_sd(x, zero);
+    //         y = _mm_move_sd(y, zero);
+    //         x0 = _mm_move_sd(x0, _mm_set_pd1((x_start + idx[0]) * x_step + left));
+    //         lsqr = _mm_move_sd(lsqr, zero);
+
+    //         if(curr_idx > calc_width) {
+    //             finished[0] = true;
+    //         }
+    //     }
+        
+    //     if((!_mm_comilt_sd(_mm_unpackhi_pd(lsqr, lsqr), four) || repeats[1] >= iters) && !finished[1]) {
+    //         // Update image
+    //         image[y_start * width + (x_start + idx[1])] = repeats[1];
+
+    //         // Reset
+    //         repeats[1] = 0;
+    //         ge[1] = false;
+    //         idx[1] = curr_idx++;
+    //         x = _mm_move_sd(zero, x);
+    //         y = _mm_move_sd(zero, y);
+    //         x0 = _mm_move_sd(_mm_set_pd1((x_start + idx[1]) * x_step + left), x0);
+    //         lsqr = _mm_move_sd(zero, lsqr);
+
+    //         if(curr_idx > calc_width) {
+    //             finished[1] = true;
+    //         }
+    //     }
+    // }
+
+    if(idx[0] < calc_width) {
         calc_mandelbrot_set(x_start + idx[0], x_end, y_start, y_end);
     }
-    if(!finished[1]) {
+    if(idx[1] < calc_width) {
         calc_mandelbrot_set(x_start + idx[1], x_end, y_start, y_end);
     }
 }
