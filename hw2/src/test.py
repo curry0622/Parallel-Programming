@@ -13,5 +13,6 @@ if __name__ == '__main__':
   f = open(file=f'../testcases/{args.t}.txt', mode='r')
   line = f.readline()
   subprocess.run(['make'], shell=True)
+  print(f'Running test case {args.t} with {args.c} cores')
   subprocess.run([f'srun -n1 -c{args.c} ./hw2{args.m} {args.o} {line}'], shell=True)
   subprocess.run([f'hw2-diff ../testcases/{args.t}.png {args.o}'], shell=True)
