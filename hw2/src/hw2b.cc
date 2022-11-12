@@ -13,7 +13,27 @@
 #include <mpi.h>
 #include <omp.h>
 #include <iostream>
+#include <emmintrin.h>
+#include <smmintrin.h>
+#include <pmmintrin.h>
 
+// Calculate the length_squared
+void calc_lsqr(double* x, double* y, double* x0, double* y0, double* lsqr) {
+    double temp = (*x) * (*x) - (*y) * (*y) + (*x0);
+    *y = 2 * (*x) * (*y) + (*y0);
+    *x = temp;
+    *lsqr = (*x) * (*x) + (*y) * (*y);
+}
+
+// Calculate the length_squared using SSE
+void calc_lsqr_sse(__m128d* x, __m128d* y, __m128d* x0, __m128d* y0, __m128d* lsqr) {
+    __m128d temp = _mm_add_pd(_mm_sub_pd(_mm_mul_pd(*x, *x), _mm_mul_pd(*y, *y)), *x0);
+    *y = _mm_add_pd(_mm_mul_pd(_mm_mul_pd(*x, *y), _mm_set1_pd(2)), *y0);
+    *x = temp;
+    *lsqr = _mm_add_pd(_mm_mul_pd(*x, *x), _mm_mul_pd(*y, *y));
+}
+
+// Write image
 void write_png(const char* filename, int iters, int width, int height, int size, int calc_height, const int* buffer) {
     FILE* fp = fopen(filename, "wb");
     assert(fp);
@@ -31,8 +51,9 @@ void write_png(const char* filename, int iters, int width, int height, int size,
     png_bytep row = (png_bytep)malloc(row_size);
     for(int y = height - 1; y >= 0; y--) {
         memset(row, 0, row_size);
+        int base = y % size * calc_height + y / size;
         for(int x = 0; x < width; x++) {
-            int p = buffer[(y % size * calc_height + y / size) * width + x];
+            int p = buffer[base * width + x];
             png_bytep color = row + x * 3;
             if(p != iters) {
                 if(p & 16) {
@@ -50,7 +71,6 @@ void write_png(const char* filename, int iters, int width, int height, int size,
     png_destroy_write_struct(&png_ptr, &info_ptr);
     fclose(fp);
 }
-
 
 int main(int argc, char **argv) {
     // MPI init
@@ -70,6 +90,7 @@ int main(int argc, char **argv) {
     int width = strtol(argv[7], 0, 10);
     int height = strtol(argv[8], 0, 10);
 
+    // Calculated from arguments
     double x_step = (right - left) / width;
     double y_step = (upper - lower) / height;
     int calc_height = ceil((double)height / size);
@@ -78,27 +99,54 @@ int main(int argc, char **argv) {
     int *buffer = (int *)malloc(calc_height * width * sizeof(int));
     int *image = (int *)malloc(size * calc_height * width * sizeof(int));
 
+    // SSE constants
+    __m128d zero = _mm_setzero_pd(), two = _mm_set_pd1(2), four = _mm_set_pd1(4);
+
     // Mandelbrot set
-    // int j = height - 1 - rank, row = 0; j >= 0; j -= size, row++
-    // int j = 0, row = 0; j < height; j += size, row++
     for(int j = rank, row = 0; j < height; j += size, row++) {
         double y0 = j * y_step + lower;
+        __m128d y00 = _mm_load1_pd(&y0);
+        int end = (width >> 1) << 1;
+
 #pragma omp parallel for schedule(dynamic, 1)
-        for(int i = 0; i < width; ++i) {
+        for(int i = 0; i < width; i += 2) {
             // Initialization
-            int repeats = 0;
-            double x = 0, y = 0, lsqr = 0, x0 = i * x_step + left;
+            double x0[2] = {i * x_step + left, (i + 1) * x_step + left};
+            __m128d x00 = _mm_load_pd(x0);
+            __m128d x = zero, y = zero, lsqr = zero;
+            int repeats[2] = {0, 0};
+            bool finish[2] = {false, false};
 
             // Calculate the number of iterations
-            while(repeats < iters && lsqr < 4) {
-                double temp = x * x - y * y + x0;
-                y = 2 * x * y + y0;
-                x = temp;
-                lsqr = x * x + y * y;
-                repeats++;
+            while(!finish[0] || !finish[1]) {
+                if(!finish[0]) {
+                    if(repeats[0] < iters && _mm_comilt_sd(lsqr, four))
+                        repeats[0]++;
+                    else
+                        finish[0] = true;
+                }
+                if(!finish[1]) {
+                    if(repeats[1] < iters && _mm_comilt_sd(_mm_unpackhi_pd(lsqr, lsqr), four))
+                        repeats[1]++;
+                    else
+                        finish[1] = true;
+                }
+                calc_lsqr_sse(&x, &y, &x00, &y00, &lsqr);
             }
 
             // Write buffer
+            buffer[row * width + i] = repeats[0];
+            buffer[row * width + i + 1] = repeats[1];
+        }
+
+        // Remainder
+        for(int i = end; i < width; i++) {
+            double x = 0, y = 0, lsqr = 0, x0 = i * x_step + left;
+            int repeats = 0;
+            while(repeats < iters && lsqr < 4) {
+                calc_lsqr(&x, &y, &x0, &y0, &lsqr);
+                repeats++;
+            }
             buffer[row * width + i] = repeats;
         }
     }
@@ -109,8 +157,7 @@ int main(int argc, char **argv) {
     // Draw image and cleanup
     if (rank == 0)
         write_png(filename, iters, width, height, size, calc_height, image);
-    free(buffer);
-    free(image);
+    free(buffer), free(image);
     MPI_Finalize();
     return 0;
 }
