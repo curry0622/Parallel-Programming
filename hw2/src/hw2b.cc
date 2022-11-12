@@ -161,7 +161,7 @@ int main(int argc, char **argv) {
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
 
-    // Argument parsing
+    // Parsing arguments
     parse_args(argc, argv);
 
     // calculate mandelbrot set using omp
