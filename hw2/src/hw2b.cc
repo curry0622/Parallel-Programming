@@ -100,7 +100,7 @@ int main(int argc, char **argv) {
     int *image = (int *)malloc(size * calc_height * width * sizeof(int));
 
     // SSE constants
-    __m128d zero = _mm_setzero_pd(), two = _mm_set_pd1(2), four = _mm_set_pd1(4);
+    __m128d zero = _mm_setzero_pd(),  four = _mm_set_pd1(4);
 
     // Mandelbrot set
     for(int j = rank, row = 0; j < height; j += size, row++) {
