@@ -17,6 +17,37 @@
 #include <smmintrin.h>
 #include <pmmintrin.h>
 
+// Global variables
+int rank, size;
+char *filename;
+int iters;
+double left, right, lower, upper;
+int width, height;
+double x_step, y_step;
+int calc_height;
+int *buffer, *image;
+
+// Arguments parsing
+void parse_args(int argc, char **argv) {
+    assert(argc == 9);
+
+    filename = argv[1];
+    iters = strtol(argv[2], 0, 10);
+    left = strtod(argv[3], 0);
+    right = strtod(argv[4], 0);
+    lower = strtod(argv[5], 0);
+    upper = strtod(argv[6], 0);
+    width = strtol(argv[7], 0, 10);
+    height = strtol(argv[8], 0, 10);
+
+    x_step = (right - left) / width;
+    y_step = (upper - lower) / height;
+    calc_height = ceil((double)height / size);
+
+    buffer = (int *)malloc(calc_height * width * sizeof(int));
+    image = (int *)malloc(size * calc_height * width * sizeof(int));
+}
+
 // Calculate the length_squared
 void calc_lsqr(double* x, double* y, double* x0, double* y0, double* lsqr) {
     double temp = (*x) * (*x) - (*y) * (*y) + (*x0);
@@ -33,83 +64,17 @@ void calc_lsqr_sse(__m128d* x, __m128d* y, __m128d* x0, __m128d* y0, __m128d* ls
     *lsqr = _mm_add_pd(_mm_mul_pd(*x, *x), _mm_mul_pd(*y, *y));
 }
 
-// Write image
-void write_png(const char* filename, int iters, int width, int height, int size, int calc_height, const int* buffer) {
-    FILE* fp = fopen(filename, "wb");
-    assert(fp);
-    png_structp png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
-    assert(png_ptr);
-    png_infop info_ptr = png_create_info_struct(png_ptr);
-    assert(info_ptr);
-    png_init_io(png_ptr, fp);
-    png_set_IHDR(png_ptr, info_ptr, width, height, 8, PNG_COLOR_TYPE_RGB, PNG_INTERLACE_NONE,
-                 PNG_COMPRESSION_TYPE_DEFAULT, PNG_FILTER_TYPE_DEFAULT);
-    png_set_filter(png_ptr, 0, PNG_NO_FILTERS);
-    png_write_info(png_ptr, info_ptr);
-    png_set_compression_level(png_ptr, 1);
-    size_t row_size = 3 * width * sizeof(png_byte);
-    png_bytep row = (png_bytep)malloc(row_size);
-    for(int y = height - 1; y >= 0; y--) {
-        memset(row, 0, row_size);
-        int base = y % size * calc_height + y / size;
-        for(int x = 0; x < width; x++) {
-            int p = buffer[base * width + x];
-            png_bytep color = row + x * 3;
-            if(p != iters) {
-                if(p & 16) {
-                    color[0] = 240;
-                    color[1] = color[2] = (p & 15) << 4;
-                } else {
-                    color[0] = (p & 15) << 4;
-                }
-            }
-        }
-        png_write_row(png_ptr, row);
-    }
-    free(row);
-    png_write_end(png_ptr, NULL);
-    png_destroy_write_struct(&png_ptr, &info_ptr);
-    fclose(fp);
-}
-
-int main(int argc, char **argv) {
-    // MPI init
-    int rank, size;
-    MPI_Init(&argc, &argv);
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    MPI_Comm_size(MPI_COMM_WORLD, &size);
-
-    // Argument parsing
-    assert(argc == 9);
-    char *filename = argv[1];
-    int iters = strtol(argv[2], 0, 10);
-    double left = strtod(argv[3], 0);
-    double right = strtod(argv[4], 0);
-    double lower = strtod(argv[5], 0);
-    double upper = strtod(argv[6], 0);
-    int width = strtol(argv[7], 0, 10);
-    int height = strtol(argv[8], 0, 10);
-
-    // Calculated from arguments
-    double x_step = (right - left) / width;
-    double y_step = (upper - lower) / height;
-    int calc_height = ceil((double)height / size);
-
-    // Memory allocation
-    int *buffer = (int *)malloc(calc_height * width * sizeof(int));
-    int *image = (int *)malloc(size * calc_height * width * sizeof(int));
-
-    // SSE constants
+// Calculate the mandelbrot set using omp
+void calc_mandelbrot_set_omp() {
     __m128d zero = _mm_setzero_pd(),  four = _mm_set_pd1(4);
 
-    // Mandelbrot set
     for(int j = rank, row = 0; j < height; j += size, row++) {
         double y0 = j * y_step + lower;
         __m128d y00 = _mm_load1_pd(&y0);
         int end = (width >> 1) << 1;
 
 #pragma omp parallel for schedule(dynamic, 1)
-        for(int i = 0; i < width; i += 2) {
+        for(int i = 0; i < end; i += 2) {
             // Initialization
             double x0[2] = {i * x_step + left, (i + 1) * x_step + left};
             __m128d x00 = _mm_load_pd(x0);
@@ -140,23 +105,74 @@ int main(int argc, char **argv) {
         }
 
         // Remainder
-        for(int i = end; i < width; i++) {
-            double x = 0, y = 0, lsqr = 0, x0 = i * x_step + left;
+        if(end < width) {
+            double x = 0, y = 0, lsqr = 0, x0 = end * x_step + left;
             int repeats = 0;
             while(repeats < iters && lsqr < 4) {
                 calc_lsqr(&x, &y, &x0, &y0, &lsqr);
                 repeats++;
             }
-            buffer[row * width + i] = repeats;
+            buffer[row * width + end] = repeats;
         }
     }
+}
+
+// Write image
+void write_png() {
+    FILE* fp = fopen(filename, "wb");
+    assert(fp);
+    png_structp png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+    assert(png_ptr);
+    png_infop info_ptr = png_create_info_struct(png_ptr);
+    assert(info_ptr);
+    png_init_io(png_ptr, fp);
+    png_set_IHDR(png_ptr, info_ptr, width, height, 8, PNG_COLOR_TYPE_RGB, PNG_INTERLACE_NONE, PNG_COMPRESSION_TYPE_DEFAULT, PNG_FILTER_TYPE_DEFAULT);
+    png_set_filter(png_ptr, 0, PNG_NO_FILTERS);
+    png_write_info(png_ptr, info_ptr);
+    png_set_compression_level(png_ptr, 1);
+    size_t row_size = 3 * width * sizeof(png_byte);
+    png_bytep row = (png_bytep)malloc(row_size);
+    for(int y = height - 1; y >= 0; y--) {
+        memset(row, 0, row_size);
+        // Calculate the base index
+        int base = y % size * calc_height + y / size;
+        for(int x = 0; x < width; x++) {
+            int p = image[base * width + x];
+            png_bytep color = row + x * 3;
+            if(p != iters) {
+                if(p & 16) {
+                    color[0] = 240;
+                    color[1] = color[2] = (p & 15) << 4;
+                } else
+                    color[0] = (p & 15) << 4;
+            }
+        }
+        png_write_row(png_ptr, row);
+    }
+    free(row);
+    png_write_end(png_ptr, NULL);
+    png_destroy_write_struct(&png_ptr, &info_ptr);
+    fclose(fp);
+}
+
+int main(int argc, char **argv) {
+    // MPI init
+    MPI_Init(&argc, &argv);
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
+
+    // Argument parsing
+    parse_args(argc, argv);
+
+    // calculate mandelbrot set using omp
+    calc_mandelbrot_set_omp();
 
     // MPI gather result
     MPI_Gather(buffer, calc_height * width, MPI_INT, image, calc_height * width, MPI_INT, 0, MPI_COMM_WORLD);
 
     // Draw image and cleanup
     if (rank == 0)
-        write_png(filename, iters, width, height, size, calc_height, image);
+        write_png();
     free(buffer), free(image);
     MPI_Finalize();
     return 0;
