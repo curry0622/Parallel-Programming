@@ -62,7 +62,7 @@ int main(int argc, char** argv) {
     sched_getaffinity(0, sizeof(cpuSet), &cpuSet);
     unsigned long long cpuNum = CPU_COUNT(&cpuSet);
 
-    // Creaet threads
+    // Create threads
     threadNum = cpuNum * 2;
     pthread_t threads[threadNum];
     int threadID[threadNum];
