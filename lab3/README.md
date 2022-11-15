@@ -26,6 +26,14 @@ e.g.
 
 ## Judge
 
+For all test cases
+
+```shell
+lab3-judge
+```
+
+or simple test case
+
 ```shell
 png-diff [OUTPUT_IMG] [ANS_IMG]
 ```
