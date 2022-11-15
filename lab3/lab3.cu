@@ -11,20 +11,20 @@
 
 /* Hint 7 */
 // this variable is used by device
-__constant__ int mask[MASK_N][MASK_X][MASK_Y] = { 
+__constant__ int mask[MASK_N][MASK_X][MASK_Y] = {
     {{ -1, -4, -6, -4, -1},
      { -2, -8,-12, -8, -2},
-     {  0,  0,  0,  0,  0}, 
-     {  2,  8, 12,  8,  2}, 
+     {  0,  0,  0,  0,  0},
+     {  2,  8, 12,  8,  2},
      {  1,  4,  6,  4,  1}},
-    {{ -1, -2,  0,  2,  1}, 
-     { -4, -8,  0,  8,  4}, 
-     { -6,-12,  0, 12,  6}, 
-     { -4, -8,  0,  8,  4}, 
-     { -1, -2,  0,  2,  1}} 
+    {{ -1, -2,  0,  2,  1},
+     { -4, -8,  0,  8,  4},
+     { -6,-12,  0, 12,  6},
+     { -4, -8,  0,  8,  4},
+     { -1, -2,  0,  2,  1}}
 };
 
-int read_png(const char* filename, unsigned char** image, unsigned* height, 
+int read_png(const char* filename, unsigned char** image, unsigned* height,
              unsigned* width, unsigned* channels) {
 
     unsigned char sig[8];
@@ -41,7 +41,7 @@ int read_png(const char* filename, unsigned char** image, unsigned* height,
     png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
     if (!png_ptr)
         return 4;   /* out of memory */
-  
+
     info_ptr = png_create_info_struct(png_ptr);
     if (!info_ptr) {
         png_destroy_read_struct(&png_ptr, NULL, NULL);
@@ -104,7 +104,7 @@ void write_png(const char* filename, png_bytep image, const unsigned height, con
 //     int adjustX, adjustY, xBound, yBound;
 
 //     /* Hint 6 */
-//     // parallel job by blockIdx, blockDim, threadIdx 
+//     // parallel job by blockIdx, blockDim, threadIdx
 //     for (y = 0; y < height; ++y) {
 //         for (x = 0; x < width; ++x) {
 //             for (i = 0; i < MASK_N; ++i) {
@@ -126,7 +126,7 @@ void write_png(const char* filename, png_bytep image, const unsigned height, con
 //                             val[i*3+2] += R * mask[i][u + xBound][v + yBound];
 //                             val[i*3+1] += G * mask[i][u + xBound][v + yBound];
 //                             val[i*3+0] += B * mask[i][u + xBound][v + yBound];
-//                         }    
+//                         }
 //                     }
 //                 }
 //             }
@@ -186,7 +186,7 @@ __global__ void gpu_sobel (unsigned char* s, unsigned char* t, unsigned height, 
                     val[i*3+2] += R * mask[i][u + xBound][v + yBound];
                     val[i*3+1] += G * mask[i][u + xBound][v + yBound];
                     val[i*3+0] += B * mask[i][u + xBound][v + yBound];
-                }    
+                }
             }
         }
     }
@@ -219,7 +219,7 @@ int main(int argc, char** argv) {
     read_png(argv[1], &host_src, &height, &width, &channels);
     int size = height * width * channels * sizeof(unsigned char);
     unsigned char *host_dst = (unsigned char*) malloc(size);
-    
+
     /* Hint 1: cudaMalloc(...) for device src and device dst */
     unsigned char *dvc_src, *dvc_dst;
     cudaMalloc((void **)&dvc_src, size);
