@@ -1,4 +1,4 @@
-# Parallel-Programming-HW-2022
+# NTHU CS5422 Parallel Programming (2022 Fall)
 
 ## HW1: Odd-Even Sort
 
