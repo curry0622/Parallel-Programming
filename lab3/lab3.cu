@@ -213,25 +213,29 @@ int main(int argc, char** argv) {
 
     assert(argc == 3);
     unsigned height, width, channels;
-    unsigned char *host_s = NULL;
-    read_png(argv[1], &host_s, &height, &width, &channels);
-    unsigned char *host_t = (unsigned char*) malloc(height * width * channels * sizeof(unsigned char));
+    unsigned char *host_src = NULL;
+    read_png(argv[1], &host_src, &height, &width, &channels);
+    int size = height * width * channels * sizeof(unsigned char);
+    unsigned char *host_dst = (unsigned char*) malloc(size);
     
     /* Hint 1: cudaMalloc(...) for device src and device dst */
-    unsigned char *dvc_s, *dvc_t;
-    cudaMalloc((void **)&dvc_s, sizeof(unsigned char));
-    cudaMalloc((void **)&dvc_t, sizeof(unsigned char));
+    unsigned char *dvc_src, *dvc_dst;
+    cudaMalloc((void **)&dvc_src, size);
+    cudaMalloc((void **)&dvc_dst, size);
 
     /* Hint 2: cudaMemcpy(...) copy source image to device (filter matrix if necessary) */
-    cudaMemcpy(dvc_s, &host_s, sizeof(unsigned char), cudaMemcpyHostToDevice);
+    cudaMemcpy(dvc_src, host_src, size, cudaMemcpyHostToDevice);
 
     /* Hint 3: acclerate function sobel */
-    // sobel(host_s, host_t, height, width, channels);
-    gpu_sobel<<<1,1>>>(dvc_s, dvc_t, height, width, channels);
+    // sobel(host_src, host_dst, height, width, channels);
+    int num_threads = 1024;
+    int num_blocks = width * height * channels / num_threads + 1;
+    std::cout << num_blocks << std::endl;
+    gpu_sobel<<<num_blocks, num_threads>>>(dvc_src, dvc_dst, height, width, channels);
 
     /* Hint 4: cudaMemcpy(...) copy result image to host */
-    cudaMemcpy(&host_t, dvc_t, sizeof(unsigned char), cudaMemcpyDeviceToHost);
-    write_png(argv[2], host_t, height, width, channels);
+    cudaMemcpy(host_dst, dvc_dst, size, cudaMemcpyDeviceToHost);
+    write_png(argv[2], host_dst, height, width, channels);
 
     return 0;
 }
