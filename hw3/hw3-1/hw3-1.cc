@@ -85,15 +85,6 @@ void cal(
     int block_end_y = block_start_y + block_width;
     int end_k = (Round + 1) * B > n ? n : (Round + 1) * B;
 
-    // int b_i = block_start_x;
-    // int b_j = block_start_y;
-
-    // int block_internal_start_x = b_i * B;
-    // int block_internal_end_x = (b_i + 1) * B > n ? n : (b_i + 1) * B;
-
-    // int block_internal_start_y = b_j * B;
-    // int block_internal_end_y = (b_j + 1) * B > n ? n : (b_j + 1) * B;
-
     for (int b_i = block_start_x; b_i < block_end_x; ++b_i) {
         for (int b_j = block_start_y; b_j < block_end_y; ++b_j) {
             // To calculate B*B elements in the block (b_i, b_j)
