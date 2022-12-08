@@ -79,8 +79,7 @@ void block_FW(int B) {
     }
 }
 
-void cal(
-    int B, int Round, int block_start_x, int block_start_y, int block_width, int block_height) {
+void cal(int B, int Round, int block_start_x, int block_start_y, int block_width, int block_height) {
     int block_end_x = block_start_x + block_height;
     int block_end_y = block_start_y + block_width;
 
