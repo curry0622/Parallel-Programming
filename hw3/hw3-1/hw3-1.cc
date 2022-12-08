@@ -60,29 +60,28 @@ int ceil(int a, int b) { return (a + b - 1) / b; }
 void block_FW(int B) {
     int round = ceil(n, B);
     for (int r = 0; r < round; ++r) {
-        printf("%d %d\n", r, round);
         fflush(stdout);
         /* Phase 1*/
         cal(B, r, r, r, 1, 1);
 
         /* Phase 2*/
-        cal(B, r, r, 0, r, 1);
-        cal(B, r, r, r + 1, round - r - 1, 1);
-        cal(B, r, 0, r, 1, r);
-        cal(B, r, r + 1, r, 1, round - r - 1);
+        cal(B, r, r, 0, 1, r);
+        cal(B, r, r, r + 1, 1, round - r - 1);
+        cal(B, r, 0, r, r, 1);
+        cal(B, r, r + 1, r, round - r - 1, 1);
 
         /* Phase 3*/
         cal(B, r, 0, 0, r, r);
-        cal(B, r, 0, r + 1, round - r - 1, r);
-        cal(B, r, r + 1, 0, r, round - r - 1);
+        cal(B, r, 0, r + 1, r, round - r - 1);
+        cal(B, r, r + 1, 0, round - r - 1, r);
         cal(B, r, r + 1, r + 1, round - r - 1, round - r - 1);
     }
 }
 
 void cal(
     int B, int Round, int block_start_x, int block_start_y, int block_width, int block_height) {
-    int block_end_x = block_start_x + block_height;
-    int block_end_y = block_start_y + block_width;
+    int block_end_x = block_start_x + block_width;
+    int block_end_y = block_start_y + block_height;
     int end_k = (Round + 1) * B > n ? n : (Round + 1) * B;
 
     for (int b_i = block_start_x; b_i < block_end_x; ++b_i) {
