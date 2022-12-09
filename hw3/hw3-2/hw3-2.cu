@@ -141,10 +141,12 @@ __global__ void phase2(int* d_dist, int r) {
     int real_i, real_j;
     int s_idx = convert_index(i, j, d_blk_fac), h_idx;
     int blk_size = d_blk_fac * d_blk_fac;
+    int i_k_offset = 0, k_j_offset = 0;
 
     // Copy data from global memory to shared memory
     if(blockIdx.x == 0) {
         // Pivot row
+        i_k_offset = blk_size;
         if(blockIdx.y < r) {
             // Left blks of pivot blk
             real_i = i + r * d_blk_fac;
@@ -156,6 +158,7 @@ __global__ void phase2(int* d_dist, int r) {
         }
     } else {
         // Pivot col
+        k_j_offset = blk_size;
         if(blockIdx.y < r) {
             // Up blks of pivot blk
             real_i = i + blockIdx.y * d_blk_fac;
@@ -175,8 +178,8 @@ __global__ void phase2(int* d_dist, int r) {
     // Compute
     for(int k = 0; k < d_blk_fac; ++k) {
         __syncthreads();
-        int i_k_dist = s_mem[blk_size + convert_index(i, k, d_blk_fac)]; // element in pivot blk
-        int k_j_dist = s_mem[convert_index(k, j, d_blk_fac)]; // element in curr blk
+        int i_k_dist = s_mem[i_k_offset + convert_index(i, k, d_blk_fac)];
+        int k_j_dist = s_mem[k_j_offset + convert_index(k, j, d_blk_fac)];
         if (i_k_dist + k_j_dist < s_mem[s_idx]) {
             s_mem[s_idx] = i_k_dist + k_j_dist;
         }
@@ -276,13 +279,13 @@ void block_FW(int* d_dist) {
         // cal(r, r, r, 1, 1);
         cudaMemcpy(d_dist, h_dist, sizeof(int) * mtx_size * mtx_size, cudaMemcpyHostToDevice);
         phase1<<<1, thds_per_blk, s_mem_size>>>(d_dist, r);
-        cudaMemcpy(h_dist, d_dist, mtx_size * mtx_size * sizeof(int), cudaMemcpyDeviceToHost);
+        // cudaMemcpy(h_dist, d_dist, mtx_size * mtx_size * sizeof(int), cudaMemcpyDeviceToHost);
 
-        for(int i = 0; i < vtx_num; i++) {
-            for(int j = 0; j < vtx_num; j++) {
-                printf("%d, %d -> %d\n", i, j, h_dist[convert_index(i, j, mtx_size)]);
-            }
-        }
+        // for(int i = 0; i < vtx_num; i++) {
+        //     for(int j = 0; j < vtx_num; j++) {
+        //         printf("%d, %d -> %d\n", i, j, h_dist[convert_index(i, j, mtx_size)]);
+        //     }
+        // }
 
         /* Phase 2*/
         // cal(r, r, 0, 1, r);
@@ -290,18 +293,19 @@ void block_FW(int* d_dist) {
         // cal(r, 0, r, r, 1);
         // cal(r, r + 1, r, round - r - 1, 1);
 
-        cudaMemcpy(d_dist, h_dist, sizeof(int) * mtx_size * mtx_size, cudaMemcpyHostToDevice);
-        phase2_row<<<round - 1, thds_per_blk, 2 * s_mem_size>>>(d_dist, r);
-        phase2_col<<<round - 1, thds_per_blk, 2 * s_mem_size>>>(d_dist, r);
+        // cudaMemcpy(d_dist, h_dist, sizeof(int) * mtx_size * mtx_size, cudaMemcpyHostToDevice);
+        phase2<<<p2_blks_per_grid, thds_per_blk, 2 * s_mem_size>>>(d_dist, r);
+        // phase2_row<<<round - 1, thds_per_blk, 2 * s_mem_size>>>(d_dist, r);
+        // phase2_col<<<round - 1, thds_per_blk, 2 * s_mem_size>>>(d_dist, r);
         cudaMemcpy(h_dist, d_dist, mtx_size * mtx_size * sizeof(int), cudaMemcpyDeviceToHost);
 
         // // FILE* file = fopen("output0.txt", "a");
-        for(int i = 0; i < vtx_num; i++) {
-            for(int j = 0; j < vtx_num; j++) {
-                printf("%d, %d -> %d\n", i, j, h_dist[convert_index(i, j, mtx_size)]);
-                // fprintf(file, "%d, %d -> %d\n", i, j, h_dist[i * n + j]);
-            }
-        }
+        // for(int i = 0; i < vtx_num; i++) {
+        //     for(int j = 0; j < vtx_num; j++) {
+        //         printf("%d, %d -> %d\n", i, j, h_dist[convert_index(i, j, mtx_size)]);
+        //         // fprintf(file, "%d, %d -> %d\n", i, j, h_dist[i * n + j]);
+        //     }
+        // }
         // fclose(file);
         // break;
 
