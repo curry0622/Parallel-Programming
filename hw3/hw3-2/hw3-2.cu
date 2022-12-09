@@ -7,7 +7,7 @@ const int V = 50010;
 int n, m; // n: # of vertices, m: # of edges
 int* h_dist;
 
-int convert_index(int i, int j, int row_size) {
+__device__ __host__ int convert_index(int i, int j, int row_size) {
     return i * row_size + j;
 }
 
@@ -96,12 +96,51 @@ void cal(int B, int Round, int block_start_x, int block_start_y, int block_width
     }
 }
 
-void block_FW(int B) {
+/* Phase 1's kernel */
+extern __shared__ int s_dist[];
+__global__ void phase1(int* d_dist, int B, int r, int n) {
+    // Get index of thread
+    int i = threadIdx.x;
+    int j = threadIdx.y;
+    int s_idx = convert_index(i, j, B);
+    int h_idx = convert_index(i + r * B, j + r * B, n);
+
+    // Copy data from global memory to shared memory
+    s_dist[s_idx] = d_dist[h_idx];
+
+    // Compute
+    for(int k = 0; k < B; ++k) {
+        __syncthreads();
+        int i_k_dist = s_dist[convert_index(i, k, B)];
+        int k_j_dist = s_dist[convert_index(k, j, B)];
+        if (i_k_dist + k_j_dist < s_dist[s_idx]) {
+            s_dist[s_idx] = i_k_dist + k_j_dist;
+        }
+    }
+
+    // Copy data from shared memory to global memory
+    d_dist[h_idx] = s_dist[s_idx];
+}
+
+void block_FW(int B, int* d_dist) {
     int round = ceil(n, B);
     for (int r = 0; r < round; ++r) {
-        fflush(stdout);
+        printf("Round %d\n", r);
         /* Phase 1*/
-        cal(B, r, r, r, 1, 1);
+        // cal(B, r, r, r, 1, 1);
+        // cudaMemcpy(d_dist, h_dist, sizeof(int) * n * n, cudaMemcpyHostToDevice);
+        // dim3 thds_per_blk(B, B);
+        // phase1<<<1, thds_per_blk, B * B * sizeof(int)>>>(d_dist, B, r, n);
+        // cudaMemcpy(h_dist, d_dist, n * n * sizeof(int), cudaMemcpyDeviceToHost);
+
+        // FILE* file = fopen("output0.txt", "a");
+        for(int i = 0; i < n; i++) {
+            for(int j = 0; j < n; j++) {
+                printf("%d, %d -> %d\n", i, j, h_dist[i * n + j]);
+                // fprintf(file, "%d, %d -> %d\n", i, j, h_dist[i * n + j]);
+            }
+        }
+        // fclose(file);
 
         /* Phase 2*/
         cal(B, r, r, 0, 1, r);
@@ -118,9 +157,31 @@ void block_FW(int B) {
 }
 
 int main(int argc, char* argv[]) {
+    // Read input
+    printf("Reading input...\n");
     input(argv[1]);
-    int B = 512;
-    block_FW(B);
+    printf("Read input done.\n");
+
+    // Allocate memory for d_dist
+    printf("Allocating memory...\n");
+    int* d_dist;
+    cudaMalloc((void**)&d_dist, sizeof(int) * n * n);
+    printf("Allocate memory done.\n");
+
+    // Copy data from host to device
+    printf("Copying data...\n");
+    cudaMemcpy(d_dist, h_dist, sizeof(int) * n * n, cudaMemcpyHostToDevice);
+    printf("Copy data done.\n");
+
+    // Block FW
+    printf("Block FW...\n");
+    int B = 32;
+    block_FW(B, d_dist);
+    printf("Block FW done.\n");
+
+    // Write output
+    printf("Writing output...\n");
     output(argv[2]);
+    printf("Write output done.\n");
     return 0;
 }
