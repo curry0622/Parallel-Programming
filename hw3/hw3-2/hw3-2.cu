@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define BLK_FAC 4
+#define BLK_FAC 2
 
 const int INF = ((1 << 30) - 1);
 const int V = 50010;
@@ -108,7 +108,6 @@ void cal(int Round, int block_start_x, int block_start_y, int block_width, int b
 }
 
 /* Phase 1's kernel */
-extern __shared__ int s_mem[];
 __global__ void phase1(int* d_dist, int r) {
     // Get index of thread
     int j = threadIdx.x; // col idx
@@ -117,6 +116,7 @@ __global__ void phase1(int* d_dist, int r) {
     int h_idx = convert_index(i + r * d_blk_fac, j + r * d_blk_fac, d_mtx_size);
 
     // Copy data from global memory to shared memory
+    extern __shared__ int s_mem[];
     s_mem[s_idx] = d_dist[h_idx];
 
     // Compute
@@ -134,40 +134,127 @@ __global__ void phase1(int* d_dist, int r) {
 }
 
 /* Phase 2's kernel */
-extern __shared__ int s_mem[];
 __global__ void phase2(int* d_dist, int r) {
     // Get index of thread
     int j = threadIdx.x; // col idx
     int i = threadIdx.y; // row idx
+    int real_i, real_j;
     int s_idx = convert_index(i, j, d_blk_fac), h_idx;
+    int blk_size = d_blk_fac * d_blk_fac;
 
     // Copy data from global memory to shared memory
     if(blockIdx.x == 0) {
-        // Compute pivot row
+        // Pivot row
         if(blockIdx.y < r) {
             // Left blks of pivot blk
-            h_idx = convert_index(i + r * d_blk_fac, j + blockIdx.y * d_blk_fac, d_mtx_size);
+            real_i = i + r * d_blk_fac;
+            real_j = j + blockIdx.y * d_blk_fac;
         } else {
             // Right blks of pivot blk
-            h_idx = convert_index(i + r * d_blk_fac, j + (blockIdx.y + 1) * d_blk_fac, d_mtx_size);
+            real_i = i + r * d_blk_fac;
+            real_j = j + (blockIdx.y + 1) * d_blk_fac;
         }
     } else {
-        // Compute pivot col
+        // Pivot col
         if(blockIdx.y < r) {
             // Up blks of pivot blk
-            h_idx = convert_index(i + blockIdx.y * d_blk_fac, j + r * d_blk_fac, d_mtx_size);
+            real_i = i + blockIdx.y * d_blk_fac;
+            real_j = j + r * d_blk_fac;
         } else {
             // Down blks of pivot blk
-            h_idx = convert_index(i + (blockIdx.y + 1) * d_blk_fac, j + r * d_blk_fac, d_mtx_size);
+            real_i = i + (blockIdx.y + 1) * d_blk_fac;
+            real_j = j + r * d_blk_fac;
         }
     }
-    s_mem[s_idx] = d_dist[h_idx];
+    h_idx = convert_index(real_i, real_j, d_mtx_size);
+
+    extern __shared__ int s_mem[];
+    s_mem[s_idx] = d_dist[h_idx]; // curr blk
+    s_mem[blk_size + s_idx] = d_dist[convert_index(i + r * d_blk_fac, j + r * d_blk_fac, d_mtx_size)]; // pivot blk
 
     // Compute
     for(int k = 0; k < d_blk_fac; ++k) {
         __syncthreads();
-        int i_k_dist = s_mem[convert_index(i, k, d_blk_fac)];
-        int k_j_dist = s_mem[convert_index(k, j, d_blk_fac)];
+        int i_k_dist = s_mem[blk_size + convert_index(i, k, d_blk_fac)]; // element in pivot blk
+        int k_j_dist = s_mem[convert_index(k, j, d_blk_fac)]; // element in curr blk
+        if (i_k_dist + k_j_dist < s_mem[s_idx]) {
+            s_mem[s_idx] = i_k_dist + k_j_dist;
+        }
+    }
+
+    // Copy data from shared memory to global memory
+    d_dist[h_idx] = s_mem[s_idx];
+}
+
+/* Phase 2 row kernel */
+__global__ void phase2_row(int* d_dist, int r) {
+    // Get index of thread
+    int j = threadIdx.x; // col idx
+    int i = threadIdx.y; // row idx
+    int real_i, real_j;
+    int s_idx = convert_index(i, j, d_blk_fac), h_idx;
+    int blk_size = d_blk_fac * d_blk_fac;
+
+    // Copy data from global memory to shared memory
+    if(blockIdx.x < r) {
+        // Left blks of pivot blk
+        real_i = i + r * d_blk_fac;
+        real_j = j + blockIdx.x * d_blk_fac;
+    } else {
+        // Right blks of pivot blk
+        real_i = i + r * d_blk_fac;
+        real_j = j + (blockIdx.x + 1) * d_blk_fac;
+    }
+    h_idx = convert_index(real_i, real_j, d_mtx_size);
+
+    extern __shared__ int s_mem[];
+    s_mem[s_idx] = d_dist[h_idx]; // curr blk
+    s_mem[blk_size + s_idx] = d_dist[convert_index(i + r * d_blk_fac, j + r * d_blk_fac, d_mtx_size)]; // pivot blk
+
+    // Compute
+    for(int k = 0; k < d_blk_fac; ++k) {
+        __syncthreads();
+        int i_k_dist = s_mem[blk_size + convert_index(i, k, d_blk_fac)]; // element in pivot blk
+        int k_j_dist = s_mem[convert_index(k, j, d_blk_fac)]; // element in curr blk
+        if (i_k_dist + k_j_dist < s_mem[s_idx]) {
+            s_mem[s_idx] = i_k_dist + k_j_dist;
+        }
+    }
+
+    // Copy data from shared memory to global memory
+    d_dist[h_idx] = s_mem[s_idx];
+}
+
+/* Phase 2 col kernel */
+__global__ void phase2_col(int* d_dist, int r) {
+    // Get index of thread
+    int j = threadIdx.x; // col idx
+    int i = threadIdx.y; // row idx
+    int real_i, real_j;
+    int s_idx = convert_index(i, j, d_blk_fac), h_idx;
+    int blk_size = d_blk_fac * d_blk_fac;
+
+    // Copy data from global memory to shared memory
+    if(blockIdx.x < r) {
+        // Up blks of pivot blk
+        real_i = i + blockIdx.x * d_blk_fac;
+        real_j = j + r * d_blk_fac;
+    } else {
+        // Down blks of pivot blk
+        real_i = i + (blockIdx.x + 1) * d_blk_fac;
+        real_j = j + r * d_blk_fac;
+    }
+    h_idx = convert_index(real_i, real_j, d_mtx_size);
+
+    extern __shared__ int s_mem[];
+    s_mem[s_idx] = d_dist[h_idx]; // curr blk
+    s_mem[blk_size + s_idx] = d_dist[convert_index(i + r * d_blk_fac, j + r * d_blk_fac, d_mtx_size)]; // pivot blk
+
+    // Compute
+    for(int k = 0; k < d_blk_fac; ++k) {
+        __syncthreads();
+        int i_k_dist = s_mem[convert_index(i, k, d_blk_fac)]; // element in curr blk
+        int k_j_dist = s_mem[blk_size + convert_index(k, j, d_blk_fac)]; // element in pivot blk
         if (i_k_dist + k_j_dist < s_mem[s_idx]) {
             s_mem[s_idx] = i_k_dist + k_j_dist;
         }
@@ -191,15 +278,11 @@ void block_FW(int* d_dist) {
         phase1<<<1, thds_per_blk, s_mem_size>>>(d_dist, r);
         cudaMemcpy(h_dist, d_dist, mtx_size * mtx_size * sizeof(int), cudaMemcpyDeviceToHost);
 
-        // FILE* file = fopen("output0.txt", "a");
-        // for(int i = 0; i < vtx_num; i++) {
-        //     for(int j = 0; j < vtx_num; j++) {
-        //         printf("%d, %d -> %d\n", i, j, h_dist[convert_index(i, j, mtx_size)]);
-        //         fprintf(file, "%d, %d -> %d\n", i, j, h_dist[i * n + j]);
-        //     }
-        // }
-        // fclose(file);
-        // break;
+        for(int i = 0; i < vtx_num; i++) {
+            for(int j = 0; j < vtx_num; j++) {
+                printf("%d, %d -> %d\n", i, j, h_dist[convert_index(i, j, mtx_size)]);
+            }
+        }
 
         /* Phase 2*/
         // cal(r, r, 0, 1, r);
@@ -208,7 +291,8 @@ void block_FW(int* d_dist) {
         // cal(r, r + 1, r, round - r - 1, 1);
 
         cudaMemcpy(d_dist, h_dist, sizeof(int) * mtx_size * mtx_size, cudaMemcpyHostToDevice);
-        phase2<<<p2_blks_per_grid, thds_per_blk, s_mem_size>>>(d_dist, r);
+        phase2_row<<<round - 1, thds_per_blk, 2 * s_mem_size>>>(d_dist, r);
+        phase2_col<<<round - 1, thds_per_blk, 2 * s_mem_size>>>(d_dist, r);
         cudaMemcpy(h_dist, d_dist, mtx_size * mtx_size * sizeof(int), cudaMemcpyDeviceToHost);
 
         // // FILE* file = fopen("output0.txt", "a");
