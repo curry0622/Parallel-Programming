@@ -1,14 +1,13 @@
-NVFLAGS  := -std=c++11 -O3 -Xptxas="-v" -arch=sm_61 
-LDFLAGS  := -lm
-EXES     := hw3-3
+NVFLAGS := -std=c++11 -Xptxas="-v" -arch=sm_61 
+CFLAGS  := -O3
+XCFLAGS := -fopenmp
+LDFLAGS := -lm
+EXES    := hw3-3
 
-alls: $(EXES)
+all: $(EXES)
 
 clean:
 	rm -f $(EXES)
 
-seq: seq.cc
-	g++ $(CXXFLAGS) -o $@ $?
-
 hw3-3: hw3-3.cu
-	nvcc $(NVFLAGS) $(LDFLAGS) -o $@ $?
+	nvcc $(NVFLAGS) $(CFLAGS) $(LDFLAGS) -Xcompiler="$(XCFLAGS)" -o $@ $?

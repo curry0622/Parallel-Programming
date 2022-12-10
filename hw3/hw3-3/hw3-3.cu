@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <omp.h>
 
 #define BLK_FAC 32
 
@@ -239,5 +240,12 @@ int main(int argc, char* argv[]) {
 
     // Write output
     output(argv[2]);
+
+    // Test omp
+    # pragma omp parallel num_threads(2)
+    {
+        printf("Hello World from thread %d\n", omp_get_thread_num());
+    }
+
     return 0;
 }
