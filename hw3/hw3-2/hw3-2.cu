@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define BLK_FAC 32
+#define BLK_FAC 16
 
 const int INF = ((1 << 30) - 1);
 const int V = 50010;
@@ -81,7 +81,7 @@ __global__ void phase1(int* d_dist, int r) {
     s_mem[s_idx] = d_dist[h_idx];
 
     // Compute (unroll BLK_FAC times)
-    #pragma unroll 32
+    #pragma unroll 16
     for(int k = 0; k < d_blk_fac; ++k) {
         __syncthreads();
         int i_k_dist = s_mem[convert_index(i, k, d_blk_fac)];
@@ -138,7 +138,7 @@ __global__ void phase2(int* d_dist, int r) {
     s_mem[blk_size + s_idx] = d_dist[convert_index(i + r * d_blk_fac, j + r * d_blk_fac, d_mtx_size)]; // pivot blk
 
     // Compute (unroll BLK_FAC times)
-    #pragma unroll 32
+    #pragma unroll 16
     for(int k = 0; k < d_blk_fac; ++k) {
         __syncthreads();
         int i_k_dist = s_mem[i_k_offset + convert_index(i, k, d_blk_fac)];
@@ -185,7 +185,7 @@ __global__ void phase3(int* d_dist, int r) {
     s_mem[2 * blk_size + s_idx] = d_dist[convert_index(i + r * d_blk_fac, j + blk_j * d_blk_fac, d_mtx_size)]; // pivot col blk
 
     // Compute (unroll BLK_FAC times)
-    #pragma unroll 32
+    #pragma unroll 16
     for(int k = 0; k < d_blk_fac; ++k) {
         __syncthreads();
         int i_k_dist = s_mem[blk_size + convert_index(i, k, d_blk_fac)]; // pivot row blk
