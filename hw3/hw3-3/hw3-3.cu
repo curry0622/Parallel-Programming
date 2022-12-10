@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <omp.h>
 
+#define GPU_NUM 2
 #define BLK_FAC 32
 
 const int INF = ((1 << 30) - 1);
@@ -219,33 +220,59 @@ int main(int argc, char* argv[]) {
     // Read input
     input(argv[1]);
 
-    // Allocate memory for constants
-    int blk_fac = BLK_FAC;
-    cudaMemcpyToSymbol(d_vtx_num, &vtx_num, sizeof(int));
-    cudaMemcpyToSymbol(d_mtx_size, &mtx_size, sizeof(int));
-    cudaMemcpyToSymbol(d_blk_fac, &blk_fac, sizeof(int));
+    // Declare variables
+    int* d_dist[GPU_NUM];
 
-    // Allocate memory for d_dist
-    int* d_dist;
-    cudaMalloc((void**)&d_dist, sizeof(int) * mtx_size * mtx_size);
+    // Block FW using 2 GPUs
+    #pragma omp parallel num_threads(GPU_NUM)
+    {
+        // Set device
+        int d_id = omp_get_thread_num(); // device id
+        cudaSetDevice(d_id);
 
-    // Copy data from host to device
-    cudaMemcpy(d_dist, h_dist, sizeof(int) * mtx_size * mtx_size, cudaMemcpyHostToDevice);
+        // Allocate memory for constants
+        int blk_fac = BLK_FAC;
+        cudaMemcpyToSymbol(d_vtx_num, &vtx_num, sizeof(int));
+        cudaMemcpyToSymbol(d_mtx_size, &mtx_size, sizeof(int));
+        cudaMemcpyToSymbol(d_blk_fac, &blk_fac, sizeof(int));
 
-    // Block FW
-    block_FW(d_dist);
+        // Allocate memory for d_dist
+        cudaMalloc((void**)&d_dist[d_id], sizeof(int) * mtx_size * mtx_size);
 
-    // Copy data from device to host
-    cudaMemcpy(h_dist, d_dist, sizeof(int) * mtx_size * mtx_size, cudaMemcpyDeviceToHost);
+        // Copy data from host to device
+        cudaMemcpy(d_dist[d_id], h_dist, sizeof(int) * mtx_size * mtx_size, cudaMemcpyHostToDevice);
+
+        // Block FW
+        int round = ceil(vtx_num, BLK_FAC);
+        int s_mem_size = BLK_FAC * BLK_FAC * sizeof(int);
+        dim3 thds_per_blk(BLK_FAC, BLK_FAC);
+        dim3 p2_blks_per_grid(2, round - 1); // 2: 1 for row, 1 for col; round - 1: # of (blks in row(or col) - pivot blk)
+        dim3 p3_blks_per_grid(round - 1, round - 1);
+
+        for (int r = 0; r < round; ++r) {
+            // GPU[1] send row[r] to GPU[0]
+            if (d_id == 1) {
+                cudaMemcpy(d_dist[0] + convert_index(r * BLK_FAC, 0, mtx_size), d_dist[1] + convert_index(r * BLK_FAC, 0, mtx_size), sizeof(int) * BLK_FAC * mtx_size, cudaMemcpyDeviceToDevice);
+            }
+
+            // Synchronize
+            cudaDeviceSynchronize();
+            #pragma omp barrier
+
+            // Phases
+            phase1<<<1, thds_per_blk, s_mem_size>>>(d_dist[d_id], r);
+            phase2<<<p2_blks_per_grid, thds_per_blk, 2 * s_mem_size>>>(d_dist[d_id], r);
+            phase3<<<p3_blks_per_grid, thds_per_blk, 3 * s_mem_size>>>(d_dist[d_id], r);
+        }
+
+        // Copy data from device to host
+        if(d_id == 0) {
+            cudaMemcpy(h_dist, d_dist[0], sizeof(int) * mtx_size * mtx_size, cudaMemcpyDeviceToHost);
+        }
+    }
 
     // Write output
     output(argv[2]);
-
-    // Test omp
-    # pragma omp parallel num_threads(2)
-    {
-        printf("Hello World from thread %d\n", omp_get_thread_num());
-    }
 
     return 0;
 }
