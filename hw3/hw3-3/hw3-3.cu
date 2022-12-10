@@ -155,7 +155,7 @@ __global__ void phase2(int* d_dist, int r) {
 }
 
 /* Phase 3's kernel */
-__global__ void phase3(int* d_dist, int r) {
+__global__ void phase3(int* d_dist, int r, int d_id) {
     // Get index of thread
     int j = threadIdx.x; // col idx
     int i = threadIdx.y; // row idx
@@ -179,6 +179,10 @@ __global__ void phase3(int* d_dist, int r) {
     }
     real_i = i + blk_i * d_blk_fac;
 
+    if((d_id == 0 && blk_i >= r) || (d_id == 1 && blk_i < r)) {
+        return;
+    }
+
     h_idx = convert_index(real_i, real_j, d_mtx_size);
 
     extern __shared__ int s_mem[];
@@ -199,21 +203,6 @@ __global__ void phase3(int* d_dist, int r) {
 
     // Copy data from shared memory to global memory
     d_dist[h_idx] = s_mem[s_idx];
-}
-
-/* BLocked Floyd-Warshall */
-void block_FW(int* d_dist) {
-    int round = ceil(vtx_num, BLK_FAC);
-    int s_mem_size = BLK_FAC * BLK_FAC * sizeof(int);
-    dim3 thds_per_blk(BLK_FAC, BLK_FAC);
-    dim3 p2_blks_per_grid(2, round - 1); // 2: 1 for row, 1 for col; round - 1: # of (blks in row(or col) - pivot blk)
-    dim3 p3_blks_per_grid(round - 1, round - 1);
-
-    for (int r = 0; r < round; ++r) {
-        phase1<<<1, thds_per_blk, s_mem_size>>>(d_dist, r);
-        phase2<<<p2_blks_per_grid, thds_per_blk, 2 * s_mem_size>>>(d_dist, r);
-        phase3<<<p3_blks_per_grid, thds_per_blk, 3 * s_mem_size>>>(d_dist, r);
-    }
 }
 
 int main(int argc, char* argv[]) {
@@ -252,7 +241,12 @@ int main(int argc, char* argv[]) {
         for (int r = 0; r < round; ++r) {
             // GPU[1] send row[r] to GPU[0]
             if (d_id == 1) {
-                cudaMemcpy(d_dist[0] + convert_index(r * BLK_FAC, 0, mtx_size), d_dist[1] + convert_index(r * BLK_FAC, 0, mtx_size), sizeof(int) * BLK_FAC * mtx_size, cudaMemcpyDeviceToDevice);
+                cudaMemcpy(
+                    d_dist[0] + convert_index(r * BLK_FAC, 0, mtx_size),
+                    d_dist[1] + convert_index(r * BLK_FAC, 0, mtx_size),
+                    sizeof(int) * BLK_FAC * mtx_size,
+                    cudaMemcpyDeviceToDevice
+                );
             }
 
             // Synchronize
@@ -262,7 +256,7 @@ int main(int argc, char* argv[]) {
             // Phases
             phase1<<<1, thds_per_blk, s_mem_size>>>(d_dist[d_id], r);
             phase2<<<p2_blks_per_grid, thds_per_blk, 2 * s_mem_size>>>(d_dist[d_id], r);
-            phase3<<<p3_blks_per_grid, thds_per_blk, 3 * s_mem_size>>>(d_dist[d_id], r);
+            phase3<<<p3_blks_per_grid, thds_per_blk, 3 * s_mem_size>>>(d_dist[d_id], r, d_id);
         }
 
         // Copy data from device to host
