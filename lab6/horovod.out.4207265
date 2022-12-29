@@ -1,0 +1,45 @@
+[6] MPI startup(): Warning: I_MPI_PMI_LIBRARY will be ignored since the hydra process manager was found
+[7] MPI startup(): Warning: I_MPI_PMI_LIBRARY will be ignored since the hydra process manager was found
+[4] MPI startup(): Warning: I_MPI_PMI_LIBRARY will be ignored since the hydra process manager was found
+[5] MPI startup(): Warning: I_MPI_PMI_LIBRARY will be ignored since the hydra process manager was found
+[3] MPI startup(): Warning: I_MPI_PMI_LIBRARY will be ignored since the hydra process manager was found
+[1] MPI startup(): Warning: I_MPI_PMI_LIBRARY will be ignored since the hydra process manager was found
+[2] MPI startup(): Warning: I_MPI_PMI_LIBRARY will be ignored since the hydra process manager was found
+[0] MPI startup(): Warning: I_MPI_PMI_LIBRARY will be ignored since the hydra process manager was found
+[7] 2022-12-29 23:35:36.618799: I tensorflow/core/platform/cpu_feature_guard.cc:151] This TensorFlow binary is optimized with oneAPI Deep Neural Network Library (oneDNN) to use the following CPU instructions in performance-critical operations:  SSE4.1 SSE4.2
+[7] To enable them in other operations, rebuild TensorFlow with the appropriate compiler flags.
+[6] 2022-12-29 23:35:36.629565: I tensorflow/core/platform/cpu_feature_guard.cc:151] This TensorFlow binary is optimized with oneAPI Deep Neural Network Library (oneDNN) to use the following CPU instructions in performance-critical operations:  SSE4.1 SSE4.2
+[6] To enable them in other operations, rebuild TensorFlow with the appropriate compiler flags.
+[1] 2022-12-29 23:35:36.787280: I tensorflow/core/platform/cpu_feature_guard.cc:151] This TensorFlow binary is optimized with oneAPI Deep Neural Network Library (oneDNN) to use the following CPU instructions in performance-critical operations:  SSE4.1 SSE4.2
+[1] To enable them in other operations, rebuild TensorFlow with the appropriate compiler flags.
+[0] 2022-12-29 23:35:36.844960: I tensorflow/core/platform/cpu_feature_guard.cc:151] This TensorFlow binary is optimized with oneAPI Deep Neural Network Library (oneDNN) to use the following CPU instructions in performance-critical operations:  SSE4.1 SSE4.2
+[0] To enable them in other operations, rebuild TensorFlow with the appropriate compiler flags.
+[4] 2022-12-29 23:35:36.959623: I tensorflow/core/platform/cpu_feature_guard.cc:151] This TensorFlow binary is optimized with oneAPI Deep Neural Network Library (oneDNN) to use the following CPU instructions in performance-critical operations:  SSE4.1 SSE4.2
+[4] To enable them in other operations, rebuild TensorFlow with the appropriate compiler flags.
+[2] 2022-12-29 23:35:36.983694: I tensorflow/core/platform/cpu_feature_guard.cc:151] This TensorFlow binary is optimized with oneAPI Deep Neural Network Library (oneDNN) to use the following CPU instructions in performance-critical operations:  SSE4.1 SSE4.2
+[2] To enable them in other operations, rebuild TensorFlow with the appropriate compiler flags.
+[5] 2022-12-29 23:35:36.986321: I tensorflow/core/platform/cpu_feature_guard.cc:151] This TensorFlow binary is optimized with oneAPI Deep Neural Network Library (oneDNN) to use the following CPU instructions in performance-critical operations:  SSE4.1 SSE4.2
+[5] To enable them in other operations, rebuild TensorFlow with the appropriate compiler flags.
+[3] 2022-12-29 23:35:36.986598: I tensorflow/core/platform/cpu_feature_guard.cc:151] This TensorFlow binary is optimized with oneAPI Deep Neural Network Library (oneDNN) to use the following CPU instructions in performance-critical operations:  SSE4.1 SSE4.2
+[3] To enable them in other operations, rebuild TensorFlow with the appropriate compiler flags.
+[7] Number of process:  8
+[6] Number of process:  8
+[0] Number of process:  8
+[0] Step #0	Loss: 2.299639
+[0] Step #10	Loss: 0.507373
+[0] Step #20	Loss: 0.239950
+[0] Step #30	Loss: 0.169774
+[0] Step #40	Loss: 0.166420
+[0] Step #50	Loss: 0.168814
+[0] Step #60	Loss: 0.062129
+[0] Step #70	Loss: 0.131876
+[0] Step #80	Loss: 0.073571
+[0] Step #90	Loss: 0.065188
+[0] Step #100	Loss: 0.106640
+[0] Step #110	Loss: 0.048564
+[0] Step #120	Loss: 0.055804
+[1] Number of process:  8
+[5] Number of process:  8
+[4] Number of process:  8
+[2] Number of process:  8
+[3] Number of process:  8
