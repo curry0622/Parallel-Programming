@@ -2,6 +2,7 @@ import tensorflow as tf
 import horovod.tensorflow as hvd
 
 # TODO[1]: initialize Horovod.
+hvd.init()
 
 # Horovod: pin GPU to be used to process local rank (one GPU per process)
 # Since there are no GPU on apollo, this code will not be executed
@@ -37,7 +38,7 @@ loss = tf.losses.SparseCategoricalCrossentropy()
 
 # TODO[2]: adjust learning rate based on number of process.
 # default learning rate is 0.001
-lr = ...
+lr = 0.001 * hvd.size()
 
 # Create optimizer
 opt = tf.optimizers.Adam(lr)
@@ -66,6 +67,8 @@ def training_step(images, labels, first_batch):
     # initialization.
     if first_batch:
         # TODO[3]: broadcast mnist_model.variables and opt.variables() to all other processes.
+        hvd.broadcast_variables(mnist_model.variables, root_rank=0)
+        hvd.broadcast_variables(opt.variables(), root_rank=0)
 
     return loss_value
 
