@@ -1,6 +1,7 @@
 #include <iostream>
 #include <mpi.h>
 #include "JobTracker.hpp"
+#include "TaskTracker.hpp"
 
 void print_args(char *argv[]) {
     std::cout << "JOB_NAME: " << argv[1] << std::endl;
@@ -13,7 +14,7 @@ void print_args(char *argv[]) {
 }
 
 int main(int argc, char *argv[]) {
-    // Arguments count
+    // Arguments check
     assert(argc == 8);    
 
     // MPI init
@@ -23,11 +24,10 @@ int main(int argc, char *argv[]) {
     MPI_Comm_size(MPI_COMM_WORLD, &size);
 
     if(rank == 0) {
-        std::cout << "Job tracker: " << rank << std::endl;
-        print_args(argv);
-        JobTracker job_tracker(size - 1, argv[6]);
+        // print_args(argv);
+        JobTracker job_tracker(size, argv[6]);
     } else {
-        std::cout << "Task tracker: " << rank << std::endl;
+        TaskTracker task_tracker(rank, atoi(argv[5]), argv[4]);
     }
 
     return 0;

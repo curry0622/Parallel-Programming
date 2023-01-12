@@ -9,8 +9,7 @@ public:
     int num_nodes;
     std::map<int, int> loc_config;
 
-    // Constructors
-    JobTracker();
+    // Constructor
     JobTracker(int num_nodes, std::string loc_config_file);
 
     // Methods
