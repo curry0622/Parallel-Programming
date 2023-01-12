@@ -1,9 +1,8 @@
-#include <bits/stdc++.h>
-#include <mpi.h>
-#include <pthread.h>
-
 #ifndef JOBTRACKER_HPP
 #define JOBTRACKER_HPP
+
+#include <bits/stdc++.h>
+#include <mpi.h>
 
 class JobTracker {
 public:

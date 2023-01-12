@@ -1,5 +1,10 @@
 #include "TaskTracker.hpp"
 
+// Declare static variables
+pthread_mutex_t TaskTracker::mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t TaskTracker::cond = PTHREAD_COND_INITIALIZER;
+std::queue<std::pair<int, int>> TaskTracker::tasks;
+
 // Constructor
 TaskTracker::TaskTracker(int node_id, int chunk_size, int delay, int num_reducers, std::string word_file) {
     this->node_id = node_id;
@@ -14,20 +19,41 @@ TaskTracker::TaskTracker(int node_id, int chunk_size, int delay, int num_reducer
 void TaskTracker::req_map_tasks() {
     // Create map threads
     int num_map_threads = num_cpus - 1;
-    int thread_id[num_map_threads];
     pthread_t map_threads[num_map_threads];
-
+    pthread_mutex_init(&mutex, NULL);
+    pthread_cond_init(&cond, NULL);
     for(int i = 0; i < num_map_threads; i++) {
-        thread_id[i] = i;
-        pthread_create(&map_threads[i], NULL, map_thread_func, (void*)&thread_id[i]);
+        pthread_create(&map_threads[i], NULL, map_thread_func, NULL);
+    }
+
+    // While there are idle threads, get chunk_id from job tracker
+    while(true) {
+        // Get task
+        std::pair<int, int> task = get_task();
+        if(task.first == -1) {
+            break;
+        }
+        pthread_mutex_lock(&mutex);
+        tasks.push(task);
+        pthread_cond_signal(&cond); // Wake up a thread
+        pthread_mutex_unlock(&mutex);
     }
 }
 
-void* TaskTracker::map_thread_func(void* thread_id) {
-    return NULL;
+void* TaskTracker::map_thread_func(void* args) {
+    while(true) {
+        // Get task
+        pthread_mutex_lock(&mutex);
+        while(tasks.empty()) {
+            pthread_cond_wait(&cond, &mutex);
+        }
+        std::pair<int, int> task = tasks.front();
+        tasks.pop();
+        pthread_mutex_unlock(&mutex);
+    }
 }
 
-int TaskTracker::get_chunk_id() {
+std::pair<int, int> TaskTracker::get_task() {
     // Send node_id to job tracker to request a map task using tag[0]
     MPI_Send(&node_id, 1, MPI_INT, 0, 0, MPI_COMM_WORLD);
     std::cout << "TaskTracker[" << node_id << "] MPI_Send to JobTracker requests map task" << std::endl;
@@ -38,7 +64,7 @@ int TaskTracker::get_chunk_id() {
     std::cout << "TaskTracker[" << node_id << "] MPI_Recv from JobTracker chunk_id = " << buffer[0] << ", remote = " << buffer[1] << std::endl;
 
     // Return chunk_id
-    return buffer[0];
+    return std::make_pair(buffer[0], buffer[1]);
 }
 
 void TaskTracker::set_num_cpus() {
