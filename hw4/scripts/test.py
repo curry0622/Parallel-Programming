@@ -3,6 +3,8 @@ import argparse
 import subprocess
 
 TESTCASE_DIR = "/home/pp22/share/.testcases/hw4"
+OUTPUT_DIR = "../outputs"
+EXEC = "./mapreduce"
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -18,13 +20,14 @@ def run_test(inputs):
         srun \
         -N{inputs['NODES']} \
         -c{inputs['CPUS']} \
-        ./mapreduce \
+        {EXEC} \
         {inputs['JOB_NAME']} \
         {inputs['NUM_REDUCER']} \
         {inputs['DELAY']} \
+        {TESTCASE_DIR}/{inputs['INPUT_FILE_NAME']} \
         {inputs['CHUNK_SIZE']} \
-        {inputs['LOCALITY_CONFIG_FILENAME']} \
-        ../outputs/"
+        {TESTCASE_DIR}/{inputs['LOCALITY_CONFIG_FILENAME']} \
+        {OUTPUT_DIR}"
     ], shell=True)
 
 if __name__ == "__main__":

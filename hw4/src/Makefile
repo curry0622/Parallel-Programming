@@ -1,16 +1,21 @@
-CC = mpicc
-CXX = mpicxx
-CFLAGS = -lm -O3 -march=native -pipe -pthread
-CXXFLAGS = $(CFLAGS)
-TARGETS = mapreduce
+CXX := mpicxx
+CXXFLAGS := -std=c++11 -O3 -march=native -pipe -pthread
+LIBS := -lm
+EXEC := mapreduce
+SRC_DIRS := .
+SRCS := main.cc $(wildcard $(SRC_DIRS:=/*.cpp))
+OBJS := $(SRCS:.cpp=.o)
 
-.PHONY: all
-all: $(TARGETS)
+all: $(EXEC)
 
-.PHONY: clean
+$(EXEC): $(OBJS)
+	$(CXX) $(LIBS) -o $@ $^
+
+%.o: %.cpp
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
 clean:
-	rm -f $(TARGETS) $(TARGETS:=.o)
+	rm -rf $(EXEC) *.o
 
-.PHONY: test
-test: $(TARGETS)
+test: $(EXEC)
 	python3 ../scripts/test.py -t $(t)
