@@ -3,7 +3,13 @@
 // Declare static variables
 pthread_mutex_t TaskTracker::mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t TaskTracker::cond = PTHREAD_COND_INITIALIZER;
+pthread_mutex_t TaskTracker::mutex2 = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t TaskTracker::cond2 = PTHREAD_COND_INITIALIZER;
 std::queue<std::pair<int, int>> TaskTracker::tasks;
+int TaskTracker::num_working = 0;
+int TaskTracker::delay = 0;
+int TaskTracker::chunk_size = 0;
+std::string TaskTracker::word_file = "";
 
 // Constructor
 TaskTracker::TaskTracker(int node_id, int chunk_size, int delay, int num_reducers, std::string word_file) {
@@ -28,15 +34,29 @@ void TaskTracker::req_map_tasks() {
 
     // While there are idle threads, get chunk_id from job tracker
     while(true) {
+        // Wait until there is an idle thread
+        pthread_mutex_lock(&mutex2);
+        while(num_working == num_map_threads) {
+            pthread_cond_wait(&cond2, &mutex2);
+        }
+        pthread_mutex_unlock(&mutex2);
+
         // Get task
         std::pair<int, int> task = get_task();
         if(task.first == -1) {
             break;
         }
+
+        // Add task to queue
         pthread_mutex_lock(&mutex);
         tasks.push(task);
         pthread_cond_signal(&cond); // Wake up a thread
         pthread_mutex_unlock(&mutex);
+
+        // Increment num_working
+        pthread_mutex_lock(&mutex2);
+        num_working++;
+        pthread_mutex_unlock(&mutex2);
     }
 }
 
@@ -50,6 +70,34 @@ void* TaskTracker::map_thread_func(void* args) {
         std::pair<int, int> task = tasks.front();
         tasks.pop();
         pthread_mutex_unlock(&mutex);
+
+        // If task is remote, sleep
+        if(task.second) {
+            sleep(delay);
+        }
+
+        // Input split
+        std::map<int, std::string> records = input_split(task.first);
+
+        // Map
+        std::map<std::string, int> intermediate_result;
+        for(const auto& record : records) {
+            std::map<std::string, int> result = map(record);
+            for(const auto& pair : result) {
+                intermediate_result[pair.first] += pair.second;
+            }
+        }
+
+        // Output
+        std::ofstream fout("ir-" + std::to_string(task.first) + ".txt");
+        for(const auto& pair : intermediate_result) {
+            fout << pair.first << " " << pair.second << std::endl;
+        }
+
+        // Decrement num_working
+        pthread_mutex_lock(&mutex2);
+        num_working--;
+        pthread_cond_signal(&cond2); // Wake up main thread
     }
 }
 

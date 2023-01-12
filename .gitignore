@@ -24,3 +24,4 @@ hw3/hw3-3/hw3-3
 hw4/testcases/
 hw4/src/mapreduce
 hw4/src/*.o
+hw4/*/*.txt
