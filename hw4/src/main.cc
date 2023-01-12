@@ -24,10 +24,10 @@ int main(int argc, char *argv[]) {
     MPI_Comm_size(MPI_COMM_WORLD, &size);
 
     if(rank == 0) {
-        // print_args(argv);
         JobTracker job_tracker(size, argv[6]);
     } else {
         TaskTracker task_tracker(rank, atoi(argv[5]), argv[4]);
+        task_tracker.input_split(20);
     }
 
     return 0;
