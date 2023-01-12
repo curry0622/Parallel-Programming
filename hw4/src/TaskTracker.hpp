@@ -1,4 +1,5 @@
 #include <bits/stdc++.h>
+#include <mpi.h>
 
 #ifndef TASKTRACKER_HPP
 #define TASKTRACKER_HPP
@@ -19,6 +20,7 @@ public:
     void set_num_cpus();
     void input_split(int chunk_id);
     void map(int line_id);
+    int request_map_task();
 
     // Utils
     void print();
