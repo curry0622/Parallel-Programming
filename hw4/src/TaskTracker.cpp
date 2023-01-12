@@ -30,6 +30,7 @@ void TaskTracker::req_map_tasks() {
     pthread_cond_init(&cond, NULL);
     for(int i = 0; i < num_map_threads; i++) {
         pthread_create(&map_threads[i], NULL, map_thread_func, NULL);
+        std::cout << "TaskTracker " << node_id << ": Created map thread " << i << std::endl;
     }
 
     // While there are idle threads, get chunk_id from job tracker
@@ -89,7 +90,7 @@ void* TaskTracker::map_thread_func(void* args) {
         }
 
         // Output
-        std::ofstream fout("ir-" + std::to_string(task.first) + ".txt");
+        std::ofstream fout("../outputs/ir-" + std::to_string(task.first) + ".txt");
         for(const auto& pair : intermediate_result) {
             fout << pair.first << " " << pair.second << std::endl;
         }
@@ -98,6 +99,7 @@ void* TaskTracker::map_thread_func(void* args) {
         pthread_mutex_lock(&mutex2);
         num_working--;
         pthread_cond_signal(&cond2); // Wake up main thread
+        pthread_mutex_unlock(&mutex2);
     }
 }
 
