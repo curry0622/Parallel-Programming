@@ -10,17 +10,21 @@ public:
     int num_cpus;
     int node_id;
     int chunk_size;
+    int delay;
+    int num_reducers;
     std::string word_file;
-    std::map<int, std::string> records;
 
     // Constructor
-    TaskTracker(int node_id, int chunk_size, std::string word_file);
+    TaskTracker(int node_id, int chunk_size, int delay, int num_reducers, std::string word_file);
 
     // Methods
     void set_num_cpus();
-    void input_split(int chunk_id);
-    void map(int line_id);
-    int request_map_task();
+    void req_map_tasks();
+    int get_chunk_id();
+    static void* map_thread_func(void* thread_id);
+    std::map<int, std::string> input_split(int chunk_id);
+    std::map<std::string, int> map(std::pair<int, std::string> record);
+    int partition(std::string key);
 
     // Utils
     void print();

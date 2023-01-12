@@ -1,12 +1,12 @@
 #include "JobTracker.hpp"
 
-// Constructor
+/* Constructor */
 JobTracker::JobTracker(int num_nodes, std::string loc_config_file) {
     this->num_nodes = num_nodes;
     set_loc_config(loc_config_file);
 }
 
-// Methods
+/* Methods */ 
 void JobTracker::set_loc_config(std::string loc_config_file) {
     std::ifstream fin(loc_config_file);
     std::string line;
@@ -19,11 +19,10 @@ void JobTracker::set_loc_config(std::string loc_config_file) {
     }
 }
 
-void JobTracker::dispatch_map_task() {
+void JobTracker::dispatch_map_tasks() {
     // While there are still chunks
     while(loc_config.size() > 0) {
-        // Recv node_id from task tracker
-        // tag 0: request map task
+        // Recv node_id from task tracker using tag[0]
         int node_id;
         MPI_Recv(&node_id, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         std::cout << "JobTracker MPI_Recv from TaskTracker[" << node_id << "] requests map task" << std::endl;
@@ -42,8 +41,7 @@ void JobTracker::dispatch_map_task() {
             chunk_id = loc_config.begin()->first;
         }
 
-        // Send chunk_id to task tracker
-        // tag 1: receive chunk_id & remote or not
+        // Send chunk_id & remote to task tracker using tag[1]
         int buffer[2] = {chunk_id, remote};
         MPI_Send(buffer, 2, MPI_INT, node_id, 1, MPI_COMM_WORLD);
         std::cout << "JobTracker MPI_Send to TaskTracker[" << node_id << "] chunk_id = " << chunk_id << ", remote = " << remote << std::endl;
@@ -60,10 +58,10 @@ void JobTracker::dispatch_map_task() {
         MPI_Send(buffer, 2, MPI_INT, i, 1, MPI_COMM_WORLD);
         std::cout << "JobTracker MPI_Send to TaskTracker[" << i << "] chunk_id = -1, remote = 0" << std::endl;
     }
-    std::cout << "JobTracker dispatch_map_task() done" << std::endl;
+    std::cout << "JobTracker dispatch_map_tasks() done" << std::endl;
 }
 
-// Utils
+/* Utils */
 void JobTracker::print_loc_config() {
     for (const auto& p : loc_config) {
         std::cout << p.first << " " << p.second << std::endl;

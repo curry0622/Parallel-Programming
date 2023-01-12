@@ -25,9 +25,10 @@ int main(int argc, char *argv[]) {
 
     if(rank == 0) {
         JobTracker job_tracker(size, argv[6]);
-        job_tracker.dispatch_map_task();
+        job_tracker.dispatch_map_tasks();
     } else {
-        TaskTracker task_tracker(rank, atoi(argv[5]), argv[4]);
+        TaskTracker task_tracker(rank, atoi(argv[5]), atoi(argv[3]), atoi(argv[2]), argv[4]);
+        task_tracker.req_map_tasks();
     }
 
     return 0;

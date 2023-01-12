@@ -1,5 +1,6 @@
 #include <bits/stdc++.h>
 #include <mpi.h>
+#include <pthread.h>
 
 #ifndef JOBTRACKER_HPP
 #define JOBTRACKER_HPP
@@ -15,7 +16,7 @@ public:
 
     // Methods
     void set_loc_config(std::string loc_config_file);
-    void dispatch_map_task();
+    void dispatch_map_tasks();
 
     // Utils
     void print_loc_config();
