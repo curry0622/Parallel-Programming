@@ -10,6 +10,7 @@ std::string TaskTracker::word_file = "";
 int TaskTracker::num_working = 0;
 int TaskTracker::delay = 0;
 int TaskTracker::chunk_size = 0;
+int TaskTracker::node_id = 0;
 
 // Constructor
 TaskTracker::TaskTracker(int node_id, int chunk_size, int delay, int num_reducers, std::string word_file) {
@@ -23,67 +24,115 @@ TaskTracker::TaskTracker(int node_id, int chunk_size, int delay, int num_reducer
 
 // Methods
 void TaskTracker::req_map_tasks() {
+    std::ofstream log("../logs/Node-" + std::to_string(node_id) + ".log");
     // Create map threads
     int num_map_threads = num_cpus - 1;
     pthread_t map_threads[num_map_threads];
+    int map_thread_ids[num_map_threads];
     pthread_mutex_init(&mutex, NULL);
     pthread_cond_init(&cond, NULL);
     for(int i = 0; i < num_map_threads; i++) {
-        pthread_create(&map_threads[i], NULL, map_thread_func, NULL);
-        // std::cout << "TaskTracker " << node_id << ": Created map thread " << i << std::endl;
+        map_thread_ids[i] = i;
+        pthread_create(&map_threads[i], NULL, map_thread_func, (void*)&map_thread_ids[i]);
     }
 
     // While there are idle threads, get chunk_id from job tracker
     while(true) {
         // Wait until there is an idle thread
+        log << "waiting for mutex2" << std::endl;
         pthread_mutex_lock(&mutex2);
+        log << "got mutex2" << std::endl;
         while(num_working == num_map_threads) {
+            log << "waiting for cond2" << std::endl;
             pthread_cond_wait(&cond2, &mutex2);
+            log << "got cond2" << std::endl;
         }
         pthread_mutex_unlock(&mutex2);
+        log << "released mutex2" << std::endl;
 
         // Get task
         std::pair<int, int> task = get_task();
+        log << "got task: " << task.first << " " << task.second << std::endl;
 
-        // Add task to queue
-        pthread_mutex_lock(&mutex);
-        tasks.push(task);
-        pthread_cond_signal(&cond); // Wake up a thread
-        pthread_mutex_unlock(&mutex);
+        // // Add task to queue
+        // pthread_mutex_lock(&mutex);
+        // tasks.push(task);
+        // pthread_cond_signal(&cond); // Wake up a thread
+        // pthread_mutex_unlock(&mutex);
 
         if(task.first == -1) {
+            log << "got task -1" << std::endl;
             // join map threads
             for(int i = 0; i < num_map_threads; i++) {
-                std::cout << "waiting map thread " << i << std::endl;
-                pthread_join(map_threads[i], NULL);
-                std::cout << "Join map thread " << i << std::endl;
+                // Add task to queue
+                log << "waiting for mutex" << std::endl;
+                pthread_mutex_lock(&mutex);
+                log << "got mutex" << std::endl;
+                tasks.push(task);
+                log << "pushed task -1" << std::endl;
+                pthread_cond_signal(&cond); // Wake up a thread
+                log << "signaled cond" << std::endl;
+                pthread_mutex_unlock(&mutex);
+                log << "released mutex" << std::endl;
+                // log << "waiting for thread " << i << std::endl;
+                // pthread_join(map_threads[i], NULL);
+                // log << "joined thread " << i << std::endl;
             }
-            // thread exit
-            pthread_exit(NULL);
+            break;
+        } else {
+            // Add task to queue
+            log << "waiting for mutex" << std::endl;
+            pthread_mutex_lock(&mutex);
+            log << "got mutex" << std::endl;
+            tasks.push(task);
+            log << "pushed task " << task.first << " " << task.second << std::endl;
+            pthread_cond_signal(&cond); // Wake up a thread
+            log << "signaled cond" << std::endl;
+            pthread_mutex_unlock(&mutex);
+            log << "released mutex" << std::endl;
         }
 
         // Increment num_working
+        log << "waiting for mutex2" << std::endl;
         pthread_mutex_lock(&mutex2);
+        log << "got mutex2" << std::endl;
         num_working++;
+        log << "incremented num_working" << std::endl;
         pthread_mutex_unlock(&mutex2);
+        log << "released mutex2" << std::endl;
     }
+    log << "exiting req_map_tasks" << std::endl;
 }
 
-void* TaskTracker::map_thread_func(void* args) {
+void* TaskTracker::map_thread_func(void* id) {
+    std::ofstream log("../logs/Node-" + std::to_string(node_id) + "-Thd-" + std::to_string(*((int*)id)) + ".log");
     while(true) {
         // Get task
+        log << "Waiting for mutex" << std::endl;
         pthread_mutex_lock(&mutex);
+        log << "Got mutex" << std::endl;
         while(tasks.empty()) {
+            log << "Waiting for cond" << std::endl;
             pthread_cond_wait(&cond, &mutex);
+            log << "Got cond" << std::endl;
         }
         std::pair<int, int> task = tasks.front();
         if(task.first == -1) {
-            pthread_mutex_unlock(&mutex);
-            return NULL;
-        } else {
+            log << "Got task -1" << std::endl;
             tasks.pop();
+            log << "Popped task" << std::endl;
+            pthread_mutex_unlock(&mutex);
+            log << "Released mutex" << std::endl;
+            log << "map thread func exit" << std::endl;
+            log.close();
+            pthread_exit(NULL);
+        } else {
+            log << "Got task " << task.first << std::endl;
+            tasks.pop();
+            log << "Popped task" << std::endl;
         }
         pthread_mutex_unlock(&mutex);
+        log << "Released mutex" << std::endl;
 
         // If task is remote, sleep
         if(task.second) {
@@ -91,10 +140,12 @@ void* TaskTracker::map_thread_func(void* args) {
         }
 
         // Input split
+        log << "Input split" << std::endl;
         std::map<int, std::string> records = input_split(task.first);
-        std::cout << "Chunk: " << task.first << " input split done" << std::endl; 
+        log << "Input split done" << std::endl;
 
         // Map
+        log << "Map" << std::endl;
         std::map<std::string, int> intermediate_result;
         for(const auto& record : records) {
             std::map<std::string, int> result = map(record);
@@ -102,21 +153,26 @@ void* TaskTracker::map_thread_func(void* args) {
                 intermediate_result[pair.first] += pair.second;
             }
         }
-        std::cout << "Chunk: " << task.first << " map done" << std::endl;
+        log << "Map done" << std::endl;
 
         // Output
+        log << "Output" << std::endl;
         std::ofstream fout("../outputs/ir-" + std::to_string(task.first) + ".txt");
-        std::cout << "Chunk " << task.first << " output start" << std::endl;
         for(const auto& pair : intermediate_result) {
             fout << pair.first << " " << pair.second << std::endl;
         }
-        std::cout << "Chunk " << task.first << " output done" << std::endl;
+        fout.close();
 
         // Decrement num_working
+        log << "waiting for mutex2" << std::endl;
         pthread_mutex_lock(&mutex2);
+        log << "got mutex2" << std::endl;
         num_working--;
+        log << "num_working--, = " << num_working << std::endl;
         pthread_cond_signal(&cond2); // Wake up main thread
+        log << "signaled cond2" << std::endl;
         pthread_mutex_unlock(&mutex2);
+        log << "released mutex2" << std::endl;
     }
 }
 

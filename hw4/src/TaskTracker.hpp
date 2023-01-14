@@ -10,7 +10,7 @@ class TaskTracker {
 public:
     /* Variables */
     int num_cpus;
-    int node_id;
+    static int node_id;
     static int chunk_size;
     int num_reducers;
     static std::string word_file;
