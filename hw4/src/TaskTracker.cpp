@@ -6,19 +6,23 @@ pthread_cond_t TaskTracker::cond = PTHREAD_COND_INITIALIZER;
 pthread_mutex_t TaskTracker::mutex2 = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t TaskTracker::cond2 = PTHREAD_COND_INITIALIZER;
 std::queue<std::pair<int, int>> TaskTracker::tasks;
+std::string TaskTracker::job_name = "";
 std::string TaskTracker::word_file = "";
+std::string TaskTracker::output_dir = "";
 int TaskTracker::num_working = 0;
 int TaskTracker::delay = 0;
 int TaskTracker::chunk_size = 0;
 int TaskTracker::node_id = 0;
 
 // Constructor
-TaskTracker::TaskTracker(int node_id, int chunk_size, int delay, int num_reducers, std::string word_file) {
+TaskTracker::TaskTracker(int node_id, int chunk_size, int delay, int num_reducers, std::string job_name, std::string word_file, std::string output_dir) {
     this->node_id = node_id;
     this->chunk_size = chunk_size;
     this->delay = delay;
     this->num_reducers = num_reducers;
+    this->job_name = job_name;
     this->word_file = word_file;
+    this->output_dir = output_dir;
     set_num_cpus();
 }
 
@@ -116,7 +120,7 @@ void* TaskTracker::map_thread_func(void* id) {
         }
 
         // Output
-        std::ofstream fout("../outputs/ir-" + std::to_string(task.first) + ".txt");
+        std::ofstream fout(output_dir + job_name + "-ir-" + std::to_string(task.first) + ".txt");
         for(const auto& pair : intermediate_result) {
             fout << pair.first << " " << pair.second << std::endl;
         }

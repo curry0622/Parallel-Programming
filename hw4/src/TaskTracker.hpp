@@ -13,7 +13,9 @@ public:
     static int node_id;
     static int chunk_size;
     int num_reducers;
+    static std::string job_name;
     static std::string word_file;
+    static std::string output_dir;
     static int delay;
     static pthread_mutex_t mutex;
     static pthread_cond_t cond;
@@ -23,7 +25,7 @@ public:
     static pthread_cond_t cond2;
 
     /* Constructor */
-    TaskTracker(int node_id, int chunk_size, int delay, int num_reducers, std::string word_file);
+    TaskTracker(int node_id, int chunk_size, int delay, int num_reducers, std::string job_name, std::string word_file, std::string output_dir);
 
     /* Methods */
     std::pair<int, int> get_task();

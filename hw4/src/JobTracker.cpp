@@ -1,8 +1,10 @@
 #include "JobTracker.hpp"
 
 /* Constructor */
-JobTracker::JobTracker(int num_nodes, std::string loc_config_file) {
+JobTracker::JobTracker(int num_nodes, std::string job_name, std::string loc_config_file, std::string output_dir) {
     this->num_nodes = num_nodes;
+    this->job_name = job_name;
+    this->output_dir = output_dir;
     set_loc_config(loc_config_file);
 }
 
@@ -16,9 +18,8 @@ void JobTracker::set_loc_config(std::string loc_config_file) {
         ss >> chunk_id >> node_id;
         node_id = (node_id % (num_nodes - 1)) + 1;
         loc_config[chunk_id] = node_id;
-        // std::cout << "line = " << line << std::endl;
-        // std::cout << "chunk_id = " << chunk_id << ", node_id = " << node_id << std::endl;
     }
+    num_chunks = loc_config.size();
 }
 
 void JobTracker::dispatch_map_tasks() {
@@ -72,8 +73,8 @@ void JobTracker::print_loc_config() {
 
 void JobTracker::verify() {
     std::map<std::string, int> ans;
-    for(int i = 1; i <= 12; i++) {
-        std::ifstream fin("../outputs/ir-" + std::to_string(i) + ".txt");
+    for(int i = 1; i <= num_chunks; i++) {
+        std::ifstream fin(output_dir + job_name + "-ir-" + std::to_string(i) + ".txt");
         std::string line;
         while (std::getline(fin, line)) {
             std::stringstream ss(line);
@@ -83,7 +84,7 @@ void JobTracker::verify() {
             ans[word] += count;
         }
     }
-    std::ofstream fout("../outputs/ir-ans.txt");
+    std::ofstream fout(output_dir + job_name + "-ans.txt");
     for(const auto& p : ans) {
         fout << p.first << " " << p.second << std::endl;
     }

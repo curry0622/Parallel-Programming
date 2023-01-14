@@ -3,7 +3,7 @@ import argparse
 import subprocess
 
 TESTCASE_DIR = "/home/pp22/share/.testcases/hw4"
-OUTPUT_DIR = "../outputs"
+OUTPUT_DIR = "../outputs/"
 EXEC = "./mapreduce"
 
 def parse_args():
