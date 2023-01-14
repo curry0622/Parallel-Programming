@@ -1,8 +1,9 @@
 #include "JobTracker.hpp"
 
 /* Constructor */
-JobTracker::JobTracker(int num_nodes, std::string job_name, std::string loc_config_file, std::string output_dir) {
+JobTracker::JobTracker(int num_nodes, int num_reducers, std::string job_name, std::string loc_config_file, std::string output_dir) {
     this->num_nodes = num_nodes;
+    this->num_reducers = num_reducers;
     this->job_name = job_name;
     this->output_dir = output_dir;
     set_loc_config(loc_config_file);
@@ -64,6 +65,38 @@ void JobTracker::dispatch_map_tasks() {
     std::cout << "JobTracker dispatch_map_tasks() done" << std::endl;
 }
 
+void JobTracker::shuffle() {
+    // Create num_reducers files
+    std::vector<std::ofstream> fout(num_reducers);
+    for(int i = 0; i < num_reducers; i++) {
+        fout[i].open(output_dir + job_name + "-shuffle-" + std::to_string(i) + ".txt");
+    }
+
+    // Read from all intermediate files
+    for(int i = 1; i <= num_chunks; i++) {
+        std::ifstream fin(output_dir + job_name + "-ir-" + std::to_string(i) + ".txt");
+        std::string line;
+        while (std::getline(fin, line)) {
+            std::stringstream ss(line);
+            std::string word;
+            int count;
+            ss >> word >> count;
+            int offset = partition(word);
+            fout[offset] << word << " " << count << std::endl;
+        }
+    }
+
+    // Close all files
+    for(int i = 0; i < num_reducers; i++) {
+        fout[i].close();
+    }
+}
+
+int JobTracker::partition(std::string key) {
+    int offset = key[0] - 'A';
+    return offset % num_reducers;
+}
+
 /* Utils */
 void JobTracker::print_loc_config() {
     for (const auto& p : loc_config) {
@@ -71,7 +104,7 @@ void JobTracker::print_loc_config() {
     }
 }
 
-void JobTracker::verify() {
+void JobTracker::verify_ir() {
     std::map<std::string, int> ans;
     for(int i = 1; i <= num_chunks; i++) {
         std::ifstream fin(output_dir + job_name + "-ir-" + std::to_string(i) + ".txt");
@@ -84,7 +117,26 @@ void JobTracker::verify() {
             ans[word] += count;
         }
     }
-    std::ofstream fout(output_dir + job_name + "-ans.txt");
+    std::ofstream fout(output_dir + job_name + "-ir-ans.txt");
+    for(const auto& p : ans) {
+        fout << p.first << " " << p.second << std::endl;
+    }
+}
+
+void JobTracker::verify_shuffle() {
+    std::map<std::string, int> ans;
+    for(int i = 0; i < num_reducers; i++) {
+        std::ifstream fin(output_dir + job_name + "-shuffle-" + std::to_string(i) + ".txt");
+        std::string line;
+        while (std::getline(fin, line)) {
+            std::stringstream ss(line);
+            std::string word;
+            int count;
+            ss >> word >> count;
+            ans[word] += count;
+        }
+    }
+    std::ofstream fout(output_dir + job_name + "-shuffle-ans.txt");
     for(const auto& p : ans) {
         fout << p.first << " " << p.second << std::endl;
     }

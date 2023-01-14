@@ -24,9 +24,11 @@ int main(int argc, char *argv[]) {
     MPI_Comm_size(MPI_COMM_WORLD, &size);
 
     if(rank == 0) {
-        JobTracker job_tracker(size, argv[1], argv[6], argv[7]);
+        JobTracker job_tracker(size, atoi(argv[2]), argv[1], argv[6], argv[7]);
         job_tracker.dispatch_map_tasks();
-        job_tracker.verify();
+        job_tracker.verify_ir();
+        job_tracker.shuffle();
+        job_tracker.verify_shuffle();
     } else {
         TaskTracker task_tracker(rank, atoi(argv[5]), atoi(argv[3]), atoi(argv[2]), argv[1], argv[4], argv[7]);
         task_tracker.req_map_tasks();
