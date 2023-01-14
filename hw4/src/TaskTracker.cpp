@@ -201,9 +201,81 @@ std::map<std::string, int> TaskTracker::map(std::pair<int, std::string> record) 
     return word_count;
 }
 
-int TaskTracker::partition(std::string key) {
-    int offset = key[0] - 'A';
-    return offset % num_reducers;
+void TaskTracker::req_reduce_tasks() {
+    while(true) {
+        // Send node_id to job tracker to request a reduce task using tag[0]
+        MPI_Send(&node_id, 1, MPI_INT, 0, 0, MPI_COMM_WORLD);
+
+        // Receive job_id from job tracker using tag[1]
+        int job_id = 0;
+        MPI_Recv(&job_id, 1, MPI_INT, 0, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+        // If job_id == -1, exit
+        if(job_id == -1) {
+            break;
+        }
+
+        // Read shuffle file
+        std::ifstream fin(output_dir + job_name + "-shuffle-" + std::to_string(job_id) + ".txt");
+        std::string line;
+        std::vector<std::pair<std::string, int>> data;
+        while(std::getline(fin, line)) {
+            std::stringstream ss(line);
+            std::string word;
+            int count;
+            ss >> word >> count;
+            data.push_back(std::make_pair(word, count));
+        }
+
+        // Sort by keys (default)
+        data = sort(data);
+
+        // Group by exact same key (default)
+        std::map<std::string, std::vector<int>> grouped_data = group(data);
+
+        // Reduce
+        std::vector<std::pair<std::string, int>> reduced_data;
+        for(const auto& pair : grouped_data) {
+            reduced_data.push_back(reduce(pair));
+        }
+
+        // Output
+        output(reduced_data, job_id);
+    }
+}
+
+std::vector<std::pair<std::string, int>> TaskTracker::sort(std::vector<std::pair<std::string, int>> data) {
+    // Sort by keys (default)
+    std::sort(data.begin(), data.end(), [](const auto& a, const auto& b) {
+        return a.first < b.first;
+    });
+    return data;
+}
+
+std::map<std::string, std::vector<int>> TaskTracker::group(std::vector<std::pair<std::string, int>> data) {
+    // Group by exact same key (default)
+    std::map<std::string, std::vector<int>> grouped_data;
+    for(const auto& pair : data) {
+        grouped_data[pair.first].push_back(pair.second);
+    }
+    return grouped_data;
+}
+
+std::pair<std::string, int> TaskTracker::reduce(std::pair<std::string, std::vector<int>> pair) {
+    int count = 0;
+    for(const auto& c : pair.second) {
+        count += c;
+    }
+    return std::make_pair(pair.first, count);
+}
+
+void TaskTracker::output(std::vector<std::pair<std::string, int>> data, int job_id) {
+    // Output to file
+    std::ofstream fout(output_dir + job_name + "-" + std::to_string(job_id) + ".out");
+    for(const auto& pair : data) {
+        fout << pair.first << " " << pair.second << std::endl;
+    }
+    fout.close();
 }
 
 // Utils

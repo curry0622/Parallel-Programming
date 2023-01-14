@@ -22,6 +22,7 @@ public:
     void dispatch_map_tasks();
     void shuffle();
     int partition(std::string key);
+    void dispatch_reduce_tasks();
 
     // Utils
     void print_loc_config();

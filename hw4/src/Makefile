@@ -1,5 +1,5 @@
 CXX := mpicxx
-CXXFLAGS := -std=c++11 -O3 -march=native -pipe -pthread
+CXXFLAGS := -std=c++14 -O3 -march=native -pipe -pthread
 LIBS := -lm
 EXEC := mapreduce
 SRC_DIRS := .

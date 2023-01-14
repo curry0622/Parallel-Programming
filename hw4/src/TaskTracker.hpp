@@ -34,7 +34,11 @@ public:
     static void* map_thread_func(void* thread_id);
     static std::map<int, std::string> input_split(int chunk_id);
     static std::map<std::string, int> map(std::pair<int, std::string> record);
-    int partition(std::string key);
+    void req_reduce_tasks();
+    std::vector<std::pair<std::string, int>> sort(std::vector<std::pair<std::string, int>> pairs);
+    std::map<std::string, std::vector<int>> group(std::vector<std::pair<std::string, int>> pairs);
+    std::pair<std::string, int> reduce(std::pair<std::string, std::vector<int>> pair);
+    void output(std::vector<std::pair<std::string, int>> pairs, int job_id);
 
     /* Utils */
     void print();

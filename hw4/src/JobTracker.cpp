@@ -97,6 +97,30 @@ int JobTracker::partition(std::string key) {
     return offset % num_reducers;
 }
 
+void JobTracker::dispatch_reduce_tasks() {
+    // While there are still shuffle files
+    for(int i = 0; i < num_reducers; i++) {
+        // Recv node_id from task tracker using tag[0]
+        int node_id;
+        MPI_Recv(&node_id, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        std::cout << "JobTracker MPI_Recv from TaskTracker[" << node_id << "] requests reduce task" << std::endl;
+
+        // Send shuffle file id to task tracker using tag[1]
+        MPI_Send(&i, 1, MPI_INT, node_id, 1, MPI_COMM_WORLD);
+        std::cout << "JobTracker MPI_Send to TaskTracker[" << node_id << "] shuffle file id = " << i << std::endl;
+    }
+
+    // Send -1 to all task trackers
+    for(int i = 1; i < num_nodes; i++) {
+        int node_id;
+        MPI_Recv(&node_id, 1, MPI_INT, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        int buffer = -1;
+        MPI_Send(&buffer, 1, MPI_INT, i, 1, MPI_COMM_WORLD);
+        std::cout << "JobTracker MPI_Send to TaskTracker[" << i << "] shuffle file id = -1" << std::endl;
+    }
+    std::cout << "JobTracker dispatch_reduce_tasks() done" << std::endl;
+}
+
 /* Utils */
 void JobTracker::print_loc_config() {
     for (const auto& p : loc_config) {
