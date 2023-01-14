@@ -2,6 +2,10 @@
 
 /* Constructor */
 JobTracker::JobTracker(int num_nodes, int num_reducers, std::string job_name, std::string loc_config_file, std::string output_dir) {
+    // Start timer
+    clock_gettime(CLOCK_MONOTONIC, &prog_start_time);
+
+    // Initialize variables
     this->num_nodes = num_nodes;
     this->num_reducers = num_reducers;
     this->job_name = job_name;
@@ -70,7 +74,8 @@ void JobTracker::dispatch_map_tasks() {
 void JobTracker::shuffle() {
     // Start timer
     time_t start_t = time(nullptr);
-    clock_t start_c = clock();
+    struct timespec shuffle_start_time, shuffle_end_time;
+    clock_gettime(CLOCK_MONOTONIC, &shuffle_start_time);
 
     // Create num_reducers files
     std::vector<std::ofstream> fout(num_reducers);
@@ -100,11 +105,10 @@ void JobTracker::shuffle() {
     }
 
     // Log
-    time_t end_t = time(nullptr);
-    clock_t end_c = clock();
-    double elapsed = (double)(end_c - start_c) / CLOCKS_PER_SEC;
-    log(std::to_string(start_t) + "Start_Shuffle," + std::to_string(pair_count), false);
-    log(std::to_string(end_t) + "Finish_Shuffle," + std::to_string(elapsed), false);
+    clock_gettime(CLOCK_MONOTONIC, &shuffle_end_time);
+    double elapsed_sec = calc_time(shuffle_start_time, shuffle_end_time);
+    log(std::to_string(start_t) + ",Start_Shuffle," + std::to_string(pair_count), false);
+    log("Finish_Shuffle," + std::to_string(elapsed_sec));
 }
 
 int JobTracker::partition(std::string key) {
@@ -118,11 +122,12 @@ void JobTracker::dispatch_reduce_tasks() {
         // Recv node_id from task tracker using tag[0]
         int node_id;
         MPI_Recv(&node_id, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-        std::cout << "JobTracker MPI_Recv from TaskTracker[" << node_id << "] requests reduce task" << std::endl;
 
         // Send shuffle file id to task tracker using tag[1]
         MPI_Send(&i, 1, MPI_INT, node_id, 1, MPI_COMM_WORLD);
-        std::cout << "JobTracker MPI_Send to TaskTracker[" << node_id << "] shuffle file id = " << i << std::endl;
+
+        // Log
+        log("Dispatch_ReduceTask," + std::to_string(i) + "," + std::to_string(node_id));
     }
 
     // Send -1 to all task trackers
@@ -134,6 +139,9 @@ void JobTracker::dispatch_reduce_tasks() {
         std::cout << "JobTracker MPI_Send to TaskTracker[" << i << "] shuffle file id = -1" << std::endl;
     }
     std::cout << "JobTracker dispatch_reduce_tasks() done" << std::endl;
+
+    // TODO
+    // For each task, log time
 }
 
 void JobTracker::log(std::string str, bool keep_time) {
@@ -144,6 +152,18 @@ void JobTracker::log(std::string str, bool keep_time) {
     else
         fout << str << std::endl;
     fout.close();
+}
+
+double JobTracker::calc_time(struct timespec start, struct timespec end) {
+    double elapsed_sec = end.tv_sec - start.tv_sec;
+    double elapsed_nsec = end.tv_nsec - start.tv_nsec;
+    return elapsed_sec + elapsed_nsec / 1000000000.0;
+}
+
+void JobTracker::finish() {
+    clock_gettime(CLOCK_MONOTONIC, &prog_end_time);
+    double elapsed = calc_time(prog_start_time, prog_end_time);
+    log("Finish_Job," + std::to_string(elapsed));
 }
 
 /* Utils */

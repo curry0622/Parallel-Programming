@@ -7,6 +7,7 @@
 class JobTracker {
 public:
     // Variables
+    struct timespec prog_start_time, prog_end_time;
     int num_nodes;
     int num_chunks;
     int num_reducers;
@@ -24,6 +25,8 @@ public:
     int partition(std::string key);
     void dispatch_reduce_tasks();
     void log(std::string str, bool keep_time = true);
+    double calc_time(struct timespec start, struct timespec end);
+    void finish();
 
     // Utils
     void print_loc_config();
