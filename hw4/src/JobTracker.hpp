@@ -19,6 +19,7 @@ public:
 
     // Utils
     void print_loc_config();
+    void verify();
 };
 
 #endif

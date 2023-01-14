@@ -62,6 +62,9 @@ void TaskTracker::req_map_tasks() {
                 pthread_cond_signal(&cond); // Wake up a thread
                 pthread_mutex_unlock(&mutex);
             }
+            for(int i = 0; i < num_map_threads; i++) {
+                pthread_join(map_threads[i], NULL);
+            }
             break;
         } else {
             // Add task to queue

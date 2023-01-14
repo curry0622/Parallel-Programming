@@ -69,3 +69,22 @@ void JobTracker::print_loc_config() {
         std::cout << p.first << " " << p.second << std::endl;
     }
 }
+
+void JobTracker::verify() {
+    std::map<std::string, int> ans;
+    for(int i = 1; i <= 12; i++) {
+        std::ifstream fin("../outputs/ir-" + std::to_string(i) + ".txt");
+        std::string line;
+        while (std::getline(fin, line)) {
+            std::stringstream ss(line);
+            std::string word;
+            int count;
+            ss >> word >> count;
+            ans[word] += count;
+        }
+    }
+    std::ofstream fout("../outputs/ir-ans.txt");
+    for(const auto& p : ans) {
+        fout << p.first << " " << p.second << std::endl;
+    }
+}
