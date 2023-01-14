@@ -14,8 +14,10 @@ void JobTracker::set_loc_config(std::string loc_config_file) {
         std::stringstream ss(line);
         int chunk_id, node_id;
         ss >> chunk_id >> node_id;
-        node_id = (chunk_id % (num_nodes - 1)) + 1;
+        node_id = (node_id % (num_nodes - 1)) + 1;
         loc_config[chunk_id] = node_id;
+        // std::cout << "line = " << line << std::endl;
+        // std::cout << "chunk_id = " << chunk_id << ", node_id = " << node_id << std::endl;
     }
 }
 
@@ -25,7 +27,7 @@ void JobTracker::dispatch_map_tasks() {
         // Recv node_id from task tracker using tag[0]
         int node_id;
         MPI_Recv(&node_id, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-        std::cout << "JobTracker MPI_Recv from TaskTracker[" << node_id << "] requests map task" << std::endl;
+        // std::cout << "JobTracker MPI_Recv from TaskTracker[" << node_id << "] requests map task" << std::endl;
 
         // Locality aware scheduling
         int chunk_id = -1;
@@ -44,7 +46,7 @@ void JobTracker::dispatch_map_tasks() {
         // Send chunk_id & remote to task tracker using tag[1]
         int buffer[2] = {chunk_id, remote};
         MPI_Send(buffer, 2, MPI_INT, node_id, 1, MPI_COMM_WORLD);
-        std::cout << "JobTracker MPI_Send to TaskTracker[" << node_id << "] chunk_id = " << chunk_id << ", remote = " << remote << std::endl;
+        // std::cout << "JobTracker MPI_Send to TaskTracker[" << node_id << "] chunk_id = " << chunk_id << ", remote = " << remote << std::endl;
 
         // Remove chunk_id from loc_config
         loc_config.erase(chunk_id);

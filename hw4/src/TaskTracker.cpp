@@ -6,10 +6,10 @@ pthread_cond_t TaskTracker::cond = PTHREAD_COND_INITIALIZER;
 pthread_mutex_t TaskTracker::mutex2 = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t TaskTracker::cond2 = PTHREAD_COND_INITIALIZER;
 std::queue<std::pair<int, int>> TaskTracker::tasks;
+std::string TaskTracker::word_file = "";
 int TaskTracker::num_working = 0;
 int TaskTracker::delay = 0;
 int TaskTracker::chunk_size = 0;
-std::string TaskTracker::word_file = "";
 
 // Constructor
 TaskTracker::TaskTracker(int node_id, int chunk_size, int delay, int num_reducers, std::string word_file) {
@@ -30,7 +30,7 @@ void TaskTracker::req_map_tasks() {
     pthread_cond_init(&cond, NULL);
     for(int i = 0; i < num_map_threads; i++) {
         pthread_create(&map_threads[i], NULL, map_thread_func, NULL);
-        std::cout << "TaskTracker " << node_id << ": Created map thread " << i << std::endl;
+        // std::cout << "TaskTracker " << node_id << ": Created map thread " << i << std::endl;
     }
 
     // While there are idle threads, get chunk_id from job tracker
@@ -44,15 +44,23 @@ void TaskTracker::req_map_tasks() {
 
         // Get task
         std::pair<int, int> task = get_task();
-        if(task.first == -1) {
-            break;
-        }
 
         // Add task to queue
         pthread_mutex_lock(&mutex);
         tasks.push(task);
         pthread_cond_signal(&cond); // Wake up a thread
         pthread_mutex_unlock(&mutex);
+
+        if(task.first == -1) {
+            // join map threads
+            for(int i = 0; i < num_map_threads; i++) {
+                std::cout << "waiting map thread " << i << std::endl;
+                pthread_join(map_threads[i], NULL);
+                std::cout << "Join map thread " << i << std::endl;
+            }
+            // thread exit
+            pthread_exit(NULL);
+        }
 
         // Increment num_working
         pthread_mutex_lock(&mutex2);
@@ -69,16 +77,22 @@ void* TaskTracker::map_thread_func(void* args) {
             pthread_cond_wait(&cond, &mutex);
         }
         std::pair<int, int> task = tasks.front();
-        tasks.pop();
+        if(task.first == -1) {
+            pthread_mutex_unlock(&mutex);
+            return NULL;
+        } else {
+            tasks.pop();
+        }
         pthread_mutex_unlock(&mutex);
 
         // If task is remote, sleep
         if(task.second) {
-            sleep(delay);
+            // sleep(delay);
         }
 
         // Input split
         std::map<int, std::string> records = input_split(task.first);
+        std::cout << "Chunk: " << task.first << " input split done" << std::endl; 
 
         // Map
         std::map<std::string, int> intermediate_result;
@@ -88,12 +102,15 @@ void* TaskTracker::map_thread_func(void* args) {
                 intermediate_result[pair.first] += pair.second;
             }
         }
+        std::cout << "Chunk: " << task.first << " map done" << std::endl;
 
         // Output
         std::ofstream fout("../outputs/ir-" + std::to_string(task.first) + ".txt");
+        std::cout << "Chunk " << task.first << " output start" << std::endl;
         for(const auto& pair : intermediate_result) {
             fout << pair.first << " " << pair.second << std::endl;
         }
+        std::cout << "Chunk " << task.first << " output done" << std::endl;
 
         // Decrement num_working
         pthread_mutex_lock(&mutex2);
@@ -106,7 +123,7 @@ void* TaskTracker::map_thread_func(void* args) {
 std::pair<int, int> TaskTracker::get_task() {
     // Send node_id to job tracker to request a map task using tag[0]
     MPI_Send(&node_id, 1, MPI_INT, 0, 0, MPI_COMM_WORLD);
-    std::cout << "TaskTracker[" << node_id << "] MPI_Send to JobTracker requests map task" << std::endl;
+    // std::cout << "TaskTracker[" << node_id << "] MPI_Send to JobTracker requests map task" << std::endl;
 
     // Receive chunk_id & remote from job tracker using tag[1]
     int buffer[2] = {0, 0};
