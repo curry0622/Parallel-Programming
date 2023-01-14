@@ -23,6 +23,7 @@ public:
     void shuffle();
     int partition(std::string key);
     void dispatch_reduce_tasks();
+    void log(std::string str, bool keep_time = true);
 
     // Utils
     void print_loc_config();

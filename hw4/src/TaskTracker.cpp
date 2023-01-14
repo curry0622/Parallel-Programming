@@ -104,7 +104,7 @@ void* TaskTracker::map_thread_func(void* id) {
 
         // If task is remote, sleep
         if(task.second) {
-            // sleep(delay);
+            // sleep(delay); TODO: uncomment
         }
 
         // Input split

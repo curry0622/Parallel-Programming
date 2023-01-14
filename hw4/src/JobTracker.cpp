@@ -29,7 +29,6 @@ void JobTracker::dispatch_map_tasks() {
         // Recv node_id from task tracker using tag[0]
         int node_id;
         MPI_Recv(&node_id, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-        // std::cout << "JobTracker MPI_Recv from TaskTracker[" << node_id << "] requests map task" << std::endl;
 
         // Locality aware scheduling
         int chunk_id = -1;
@@ -48,24 +47,31 @@ void JobTracker::dispatch_map_tasks() {
         // Send chunk_id & remote to task tracker using tag[1]
         int buffer[2] = {chunk_id, remote};
         MPI_Send(buffer, 2, MPI_INT, node_id, 1, MPI_COMM_WORLD);
-        // std::cout << "JobTracker MPI_Send to TaskTracker[" << node_id << "] chunk_id = " << chunk_id << ", remote = " << remote << std::endl;
 
         // Remove chunk_id from loc_config
         loc_config.erase(chunk_id);
+
+        // Log
+        log("Dispatch_MapTask," + std::to_string(chunk_id) + "," + std::to_string(node_id));
     }
 
     // Send -1 to all task trackers
     for(int i = 1; i < num_nodes; i++) {
         int node_id;
-        MPI_Recv(&node_id, 1, MPI_INT, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        MPI_Recv(&node_id, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         int buffer[2] = {-1, 0};
-        MPI_Send(buffer, 2, MPI_INT, i, 1, MPI_COMM_WORLD);
-        std::cout << "JobTracker MPI_Send to TaskTracker[" << i << "] chunk_id = -1, remote = 0" << std::endl;
+        MPI_Send(buffer, 2, MPI_INT, node_id, 1, MPI_COMM_WORLD);
     }
-    std::cout << "JobTracker dispatch_map_tasks() done" << std::endl;
+
+    // TODO
+    // For each task, log time
 }
 
 void JobTracker::shuffle() {
+    // Start timer
+    time_t start_t = time(nullptr);
+    clock_t start_c = clock();
+
     // Create num_reducers files
     std::vector<std::ofstream> fout(num_reducers);
     for(int i = 0; i < num_reducers; i++) {
@@ -73,6 +79,7 @@ void JobTracker::shuffle() {
     }
 
     // Read from all intermediate files
+    int pair_count = 0;
     for(int i = 1; i <= num_chunks; i++) {
         std::ifstream fin(output_dir + job_name + "-ir-" + std::to_string(i) + ".txt");
         std::string line;
@@ -83,6 +90,7 @@ void JobTracker::shuffle() {
             ss >> word >> count;
             int offset = partition(word);
             fout[offset] << word << " " << count << std::endl;
+            pair_count++;
         }
     }
 
@@ -90,6 +98,13 @@ void JobTracker::shuffle() {
     for(int i = 0; i < num_reducers; i++) {
         fout[i].close();
     }
+
+    // Log
+    time_t end_t = time(nullptr);
+    clock_t end_c = clock();
+    double elapsed = (double)(end_c - start_c) / CLOCKS_PER_SEC;
+    log(std::to_string(start_t) + "Start_Shuffle," + std::to_string(pair_count), false);
+    log(std::to_string(end_t) + "Finish_Shuffle," + std::to_string(elapsed), false);
 }
 
 int JobTracker::partition(std::string key) {
@@ -119,6 +134,16 @@ void JobTracker::dispatch_reduce_tasks() {
         std::cout << "JobTracker MPI_Send to TaskTracker[" << i << "] shuffle file id = -1" << std::endl;
     }
     std::cout << "JobTracker dispatch_reduce_tasks() done" << std::endl;
+}
+
+void JobTracker::log(std::string str, bool keep_time) {
+    std::ofstream fout(output_dir + job_name + "-log.out", std::ios::app);
+    assert(fout.is_open());
+    if(keep_time)
+        fout << time(nullptr) << "," << str << std::endl;
+    else
+        fout << str << std::endl;
+    fout.close();
 }
 
 /* Utils */
