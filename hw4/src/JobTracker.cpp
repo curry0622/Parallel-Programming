@@ -165,3 +165,22 @@ void JobTracker::verify_shuffle() {
         fout << p.first << " " << p.second << std::endl;
     }
 }
+
+void JobTracker::verify_reduce() {
+    std::map<std::string, int> ans;
+    for(int i = 0; i < num_reducers; i++) {
+        std::ifstream fin(output_dir + job_name + "-" + std::to_string(i) + ".out");
+        std::string line;
+        while (std::getline(fin, line)) {
+            std::stringstream ss(line);
+            std::string word;
+            int count;
+            ss >> word >> count;
+            ans[word] += count;
+        }
+    }
+    std::ofstream fout(output_dir + job_name + "-reduce-ans.out");
+    for(const auto& p : ans) {
+        fout << p.first << " " << p.second << std::endl;
+    }
+}

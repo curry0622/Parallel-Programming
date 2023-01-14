@@ -28,6 +28,7 @@ public:
     void print_loc_config();
     void verify_ir();
     void verify_shuffle();
+    void verify_reduce();
 };
 
 #endif

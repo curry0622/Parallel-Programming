@@ -30,6 +30,7 @@ int main(int argc, char *argv[]) {
         job_tracker.shuffle();
         job_tracker.verify_shuffle();
         job_tracker.dispatch_reduce_tasks();
+        job_tracker.verify_reduce();
     } else {
         TaskTracker task_tracker(rank, atoi(argv[5]), atoi(argv[3]), atoi(argv[2]), argv[1], argv[4], argv[7]);
         task_tracker.req_map_tasks();
