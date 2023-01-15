@@ -21,3 +21,8 @@ hw3/hw3-2/cases
 hw3/hw3-2/hw3-2
 hw3/hw3-2/seq
 hw3/hw3-3/hw3-3
+hw4/testcases/
+hw4/src/mapreduce
+hw4/src/*.o
+hw4/outputs/*.txt
+hw4/outputs/*.out

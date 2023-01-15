@@ -11,3 +11,7 @@ In this assignment, you are asked to parallelize the sequential MandelbrotSet pr
 ## HW3: All-Pairs Shortest Path
 
 In this assignment, you are asked to solve the all-pairs shortest path problem with CPU threads and then further accelerate the program with CUDA accompanied by Blocked Floyd-Warshall algorithm.
+
+## HW4: MapReduce
+
+This assignment provides an opportunity for you to practice your parallel programming skills by implementing the scheduling and parallel programming model of the well-known big data processing framework, MapReduce.
