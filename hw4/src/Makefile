@@ -1,21 +1,14 @@
-CXX := mpicxx
-CXXFLAGS := -std=c++14 -O3 -march=native -pipe -pthread
-LIBS := -lm
-EXEC := mapreduce
-SRC_DIRS := .
-SRCS := main.cc $(wildcard $(SRC_DIRS:=/*.cpp))
-OBJS := $(SRCS:.cpp=.o)
+CXX = mpicxx
+CXXFLAGS = -O3 -lm -pthread -std=c++17
+TARGETS = mapreduce
 
-all: $(EXEC)
+.PHONY: all
+all: $(TARGETS)
 
-$(EXEC): $(OBJS)
-	$(CXX) $(LIBS) -o $@ $^
-
-%.o: %.cpp
-	$(CXX) $(CXXFLAGS) -c $< -o $@
-
+.PHONY: clean
 clean:
-	rm -rf $(EXEC) *.o
+	rm -f $(TARGETS)
 
-test: $(EXEC)
+.PHONY: test
+test: $(TARGETS)
 	python3 ../scripts/test.py -t $(t)
