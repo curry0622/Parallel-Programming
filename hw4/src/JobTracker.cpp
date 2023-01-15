@@ -33,6 +33,7 @@ void JobTracker::dispatch_map_tasks() {
         // Recv node_id from task tracker using tag[0]
         int node_id;
         MPI_Recv(&node_id, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        std::cout << "JobTracker Recv node " << node_id << std::endl;
 
         // Locality aware scheduling
         int chunk_id = -1;
@@ -51,6 +52,7 @@ void JobTracker::dispatch_map_tasks() {
         // Send chunk_id & remote to task tracker using tag[1]
         int buffer[2] = {chunk_id, remote};
         MPI_Send(buffer, 2, MPI_INT, node_id, 1, MPI_COMM_WORLD);
+        std::cout << "JobTracker Send {" << buffer[0] << ", " << buffer[1] << "} to node " << node_id << std::endl;
 
         // Remove chunk_id from loc_config
         loc_config.erase(chunk_id);
@@ -63,12 +65,25 @@ void JobTracker::dispatch_map_tasks() {
     for(int i = 1; i < num_nodes; i++) {
         int node_id;
         MPI_Recv(&node_id, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        std::cout << "JobTracker Recv node " << node_id << " using tag 0" << std::endl;
         int buffer[2] = {-1, 0};
         MPI_Send(buffer, 2, MPI_INT, node_id, 1, MPI_COMM_WORLD);
+        std::cout << "JobTracker Send {" << buffer[0] << ", " << buffer[1] << "} to node " << node_id << " using tag 1" << std::endl;
     }
 
-    // TODO
-    // For each task, log time
+    // Recv all tasks times using tag 3
+    std::cout << "JobTracker Recv all tasks times using tag 3" << std::endl;
+    for(int i = 0; i < num_chunks; i++) {
+        int node_id;
+        MPI_Recv(&node_id, 1, MPI_INT, MPI_ANY_SOURCE, 3, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        int chunk_id;
+        MPI_Recv(&chunk_id, 1, MPI_INT, node_id, 3, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        double time;
+        MPI_Recv(&time, 1, MPI_DOUBLE, node_id, 3, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+        // Log
+        log("Complete_MapTask," + std::to_string(chunk_id) + "," + std::to_string(time));
+    }
 }
 
 void JobTracker::shuffle() {
@@ -119,12 +134,12 @@ int JobTracker::partition(std::string key) {
 void JobTracker::dispatch_reduce_tasks() {
     // While there are still shuffle files
     for(int i = 0; i < num_reducers; i++) {
-        // Recv node_id from task tracker using tag[0]
+        // Recv node_id from task tracker using tag[7]
         int node_id;
-        MPI_Recv(&node_id, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        MPI_Recv(&node_id, 1, MPI_INT, MPI_ANY_SOURCE, 7, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
-        // Send shuffle file id to task tracker using tag[1]
-        MPI_Send(&i, 1, MPI_INT, node_id, 1, MPI_COMM_WORLD);
+        // Send shuffle file id to task tracker using tag[8]
+        MPI_Send(&i, 1, MPI_INT, node_id, 8, MPI_COMM_WORLD);
 
         // Log
         log("Dispatch_ReduceTask," + std::to_string(i) + "," + std::to_string(node_id));
@@ -133,15 +148,25 @@ void JobTracker::dispatch_reduce_tasks() {
     // Send -1 to all task trackers
     for(int i = 1; i < num_nodes; i++) {
         int node_id;
-        MPI_Recv(&node_id, 1, MPI_INT, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        MPI_Recv(&node_id, 1, MPI_INT, i, 7, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         int buffer = -1;
-        MPI_Send(&buffer, 1, MPI_INT, i, 1, MPI_COMM_WORLD);
+        MPI_Send(&buffer, 1, MPI_INT, i, 8, MPI_COMM_WORLD);
         std::cout << "JobTracker MPI_Send to TaskTracker[" << i << "] shuffle file id = -1" << std::endl;
     }
     std::cout << "JobTracker dispatch_reduce_tasks() done" << std::endl;
 
-    // TODO
-    // For each task, log time
+    // Recv all tasks times using tag 4
+    for(int i = 0; i < num_reducers; i++) {
+        int node_id;
+        MPI_Recv(&node_id, 1, MPI_INT, MPI_ANY_SOURCE, 4, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        int reduce_id;
+        MPI_Recv(&reduce_id, 1, MPI_INT, node_id, 4, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        double time;
+        MPI_Recv(&time, 1, MPI_DOUBLE, node_id, 4, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+        // Log
+        log("Complete_ReduceTask," + std::to_string(reduce_id) + "," + std::to_string(time));
+    }
 }
 
 void JobTracker::log(std::string str, bool keep_time) {

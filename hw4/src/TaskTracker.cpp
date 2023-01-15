@@ -6,6 +6,8 @@ pthread_cond_t TaskTracker::cond = PTHREAD_COND_INITIALIZER;
 pthread_mutex_t TaskTracker::mutex2 = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t TaskTracker::cond2 = PTHREAD_COND_INITIALIZER;
 std::queue<std::pair<int, int>> TaskTracker::tasks;
+std::map<int, double> TaskTracker::map_task_time;
+std::map<int, double> TaskTracker::reduce_task_time;
 std::string TaskTracker::job_name = "";
 std::string TaskTracker::word_file = "";
 std::string TaskTracker::output_dir = "";
@@ -50,12 +52,7 @@ void TaskTracker::req_map_tasks() {
 
         // Get task
         std::pair<int, int> task = get_task();
-
-        // // Add task to queue
-        // pthread_mutex_lock(&mutex);
-        // tasks.push(task);
-        // pthread_cond_signal(&cond); // Wake up a thread
-        // pthread_mutex_unlock(&mutex);
+        std::cout << "TaskTracker " << node_id << " got task " << task.first << " " << task.second << std::endl;
 
         if(task.first == -1) {
             // join map threads
@@ -83,9 +80,19 @@ void TaskTracker::req_map_tasks() {
         num_working++;
         pthread_mutex_unlock(&mutex2);
     }
+
+    // Send task times to job tracker using tag 3
+    for(const auto& pair : map_task_time) {
+        MPI_Send(&node_id, 1, MPI_INT, 0, 3, MPI_COMM_WORLD);
+        MPI_Send(&pair.first, 1, MPI_INT, 0, 3, MPI_COMM_WORLD);
+        MPI_Send(&pair.second, 1, MPI_DOUBLE, 0, 3, MPI_COMM_WORLD);
+    }
 }
 
 void* TaskTracker::map_thread_func(void* id) {
+    // Timer
+    struct timespec task_start_time, task_end_time;
+
     while(true) {
         // Get task
         pthread_mutex_lock(&mutex);
@@ -102,9 +109,14 @@ void* TaskTracker::map_thread_func(void* id) {
         }
         pthread_mutex_unlock(&mutex);
 
+        // Start timer
+        clock_gettime(CLOCK_MONOTONIC, &task_start_time);
+
         // If task is remote, sleep
         if(task.second) {
-            // sleep(delay); TODO: uncomment
+            std::cout << "TaskTracker " << node_id << ", Thread " << *(int*)id << ": Sleeping for remote task " << task.first << std::endl;
+            sleep(delay);
+            std::cout << "TaskTracker " << node_id << ", Thread " << *(int*)id << ": Woke up for remote task " << task.first << std::endl;
         }
 
         // Input split
@@ -126,21 +138,33 @@ void* TaskTracker::map_thread_func(void* id) {
         }
         fout.close();
 
+        // End timer
+        clock_gettime(CLOCK_MONOTONIC, &task_end_time);
+        double task_elapsed_sec = calc_time(task_start_time, task_end_time);
+
         // Decrement num_working
         pthread_mutex_lock(&mutex2);
+        map_task_time[task.first] = task_elapsed_sec;
         num_working--;
         pthread_cond_signal(&cond2); // Wake up main thread
         pthread_mutex_unlock(&mutex2);
     }
 }
 
+double TaskTracker::calc_time(struct timespec start, struct timespec end) {
+    double elapsed_sec = end.tv_sec - start.tv_sec;
+    double elapsed_nsec = end.tv_nsec - start.tv_nsec;
+    return elapsed_sec + elapsed_nsec / 1000000000.0;
+}
+
 std::pair<int, int> TaskTracker::get_task() {
     // Send node_id to job tracker to request a map task using tag[0]
     MPI_Send(&node_id, 1, MPI_INT, 0, 0, MPI_COMM_WORLD);
-    // std::cout << "TaskTracker[" << node_id << "] MPI_Send to JobTracker requests map task" << std::endl;
+    std::cout << "TaskTracker[" << node_id << "] MPI_Send to JobTracker requests map task" << std::endl;
 
     // Receive chunk_id & remote from job tracker using tag[1]
     int buffer[2] = {0, 0};
+    std::cout << "TaskTracker[" << node_id << "] waiting msg from JobTracker" << std::endl;
     MPI_Recv(buffer, 2, MPI_INT, 0, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     std::cout << "TaskTracker[" << node_id << "] MPI_Recv from JobTracker chunk_id = " << buffer[0] << ", remote = " << buffer[1] << std::endl;
 
@@ -202,18 +226,24 @@ std::map<std::string, int> TaskTracker::map(std::pair<int, std::string> record) 
 }
 
 void TaskTracker::req_reduce_tasks() {
-    while(true) {
-        // Send node_id to job tracker to request a reduce task using tag[0]
-        MPI_Send(&node_id, 1, MPI_INT, 0, 0, MPI_COMM_WORLD);
+    // Timer
+    struct timespec task_start_time, task_end_time;
 
-        // Receive job_id from job tracker using tag[1]
+    while(true) {
+        // Send node_id to job tracker to request a reduce task using tag[7]
+        MPI_Send(&node_id, 1, MPI_INT, 0, 7, MPI_COMM_WORLD);
+
+        // Receive job_id from job tracker using tag[8]
         int job_id = 0;
-        MPI_Recv(&job_id, 1, MPI_INT, 0, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        MPI_Recv(&job_id, 1, MPI_INT, 0, 8, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
         // If job_id == -1, exit
         if(job_id == -1) {
             break;
         }
+
+        // Start timer
+        clock_gettime(CLOCK_MONOTONIC, &task_start_time);
 
         // Read shuffle file
         std::ifstream fin(output_dir + job_name + "-shuffle-" + std::to_string(job_id) + ".txt");
@@ -241,6 +271,20 @@ void TaskTracker::req_reduce_tasks() {
 
         // Output
         output(reduced_data, job_id);
+
+        // End timer
+        clock_gettime(CLOCK_MONOTONIC, &task_end_time);
+        double elapsed_time = calc_time(task_start_time, task_end_time);
+        reduce_task_time[job_id] = elapsed_time;
+    }
+
+    // Send time to job tracker using tag 4
+    for(const auto& pair : reduce_task_time) {
+        int job_id = pair.first;
+        double time = pair.second;
+        MPI_Send(&node_id, 1, MPI_INT, 0, 4, MPI_COMM_WORLD);
+        MPI_Send(&job_id, 1, MPI_INT, 0, 4, MPI_COMM_WORLD);
+        MPI_Send(&time, 1, MPI_DOUBLE, 0, 4, MPI_COMM_WORLD);
     }
 }
 

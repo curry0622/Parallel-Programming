@@ -23,6 +23,8 @@ public:
     static int num_working;
     static pthread_mutex_t mutex2;
     static pthread_cond_t cond2;
+    static std::map<int, double> map_task_time;
+    static std::map<int, double> reduce_task_time;
 
     /* Constructor */
     TaskTracker(int node_id, int chunk_size, int delay, int num_reducers, std::string job_name, std::string word_file, std::string output_dir);
@@ -32,6 +34,7 @@ public:
     void set_num_cpus();
     void req_map_tasks();
     static void* map_thread_func(void* thread_id);
+    static double calc_time(struct timespec start, struct timespec end);
     static std::map<int, std::string> input_split(int chunk_id);
     static std::map<std::string, int> map(std::pair<int, std::string> record);
     void req_reduce_tasks();
