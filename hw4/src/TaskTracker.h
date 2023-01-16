@@ -271,7 +271,8 @@ public:
             data = sort(data);
 
             // Group by exact same key (default)
-            std::map<std::string, std::vector<int>> grouped_data = group(data);
+            // std::map<std::string, std::vector<int>> grouped_data = group(data);
+            std::vector<std::pair<std::string, std::vector<int>>> grouped_data = group(data);
 
             // Reduce
             std::vector<std::pair<std::string, int>> reduced_data;
@@ -299,19 +300,33 @@ public:
     }
 
     std::vector<std::pair<std::string, int>> sort(std::vector<std::pair<std::string, int>> pairs) {
-        // Sort by keys (default)
+        // Sort by keys in ascending order (default)
         std::sort(pairs.begin(), pairs.end(), [](const auto& a, const auto& b) {
             return a.first < b.first;
         });
+        // Sort by keys in descending order (demo)
+        // std::sort(pairs.begin(), pairs.end(), [](const auto& a, const auto& b) {
+        //     return a.first > b.first;
+        // });
         return pairs;
     }
 
-    std::map<std::string, std::vector<int>> group(std::vector<std::pair<std::string, int>> pairs) {
+    std::vector<std::pair<std::string, std::vector<int>>> group(std::vector<std::pair<std::string, int>> pairs) {
+        std::vector<std::pair<std::string, std::vector<int>>> grouped_data;
         // Group by exact same key (default)
-        std::map<std::string, std::vector<int>> grouped_data;
         for(const auto& pair : pairs) {
-            grouped_data[pair.first].push_back(pair.second);
+            if(grouped_data.empty() || grouped_data.back().first != pair.first) {
+                grouped_data.push_back(std::make_pair(pair.first, std::vector<int>()));
+            }
+            grouped_data.back().second.push_back(pair.second);
         }
+        // Group by first character (demo)
+        // for(const auto& pair : pairs) {
+        //     if(grouped_data.empty() || grouped_data.back().first[0] != pair.first[0]) {
+        //         grouped_data.push_back(std::make_pair(pair.first.substr(0, 1), std::vector<int>()));
+        //     }
+        //     grouped_data.back().second.push_back(pair.second);
+        // }
         return grouped_data;
     }
 
