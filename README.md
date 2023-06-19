@@ -18,4 +18,4 @@ This assignment provides an opportunity for you to practice your parallel progra
 
 ## Final Project: Parallel Matrix Multiplication
 
-[Vicky Chen](https://github.com/vickychen928) and I used several parallelism libraries, including SSE vectorization, Pthread, OpenMP, MPI, and CUDA, to accelerate matrix multiplication. More information can be seen in [this repository](https://github.com/curry0622/Parallel-Matrix-Multiplication).
+[Vicky Chen](https://github.com/vickychen928) and I utilized various parallelism libraries to enhance the speed of matrix multiplication. These libraries encompass SSE vectorization, Pthread, OpenMP, MPI, and CUDA. Additional details can be found in [this repository](https://github.com/curry0622/Parallel-Matrix-Multiplication).
